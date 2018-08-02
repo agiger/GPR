@@ -529,7 +529,7 @@ typename GaussianProcess<TScalarType>::HighPrecisionType GaussianProcess<TScalar
 
 template< class TScalarType >
 typename GaussianProcess<TScalarType>::MatrixType GaussianProcess<TScalarType>::InvertKernelMatrix(const typename GaussianProcess<TScalarType>::MatrixType &K,
-                                                      typename GaussianProcess<TScalarType>::InversionMethod inv_method = GaussianProcess<TScalarType>::FullPivotLU,
+                                                                                                   typename GaussianProcess<TScalarType>::InversionMethod inv_method,
                                                                                                    bool stable) const{
     // compute core matrix
     if(debug){

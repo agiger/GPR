@@ -11,6 +11,7 @@ INSTALL(FILES
 	LAPACKUtils.h
 	SparseGaussianProcess.h
 	GaussianProcessInference.h
+	itkUtils.h
 DESTINATION
 	include
 PERMISSIONS
