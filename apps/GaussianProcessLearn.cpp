@@ -27,6 +27,9 @@
 #include "KernelFactory.h"
 #include "Kernel.h"
 
+#include "itkUtils.h"
+#include "boost/filesystem.hpp"
+
 typedef gpr::GaussianProcess<double>            GaussianProcessType;
 typedef std::shared_ptr<GaussianProcessType>    GaussianProcessTypePointer;
 typedef GaussianProcessType::VectorType         VectorType;
@@ -39,6 +42,12 @@ typedef gpr::KernelFactory<double>              KernelFactoryType;
 
 typedef std::pair<VectorType, VectorType>       TrainingPairType;
 typedef std::vector<TrainingPairType>           TrainingPairVectorType;
+
+// ITK typedefs
+typedef itk::Image<unsigned char, 2> ImageType;
+typedef itk::Image<unsigned char, 3> ImageSeriesType;
+typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS> DisplacementType;
+typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS+1> DisplacementSeriesType;
 
 // parsing data
 TrainingPairVectorType GetTrainingData(const std::string& filename){
@@ -96,32 +105,135 @@ TrainingPairVectorType GetTrainingData(const std::string& filename){
 
 }
 
+// new data parser
+TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::string& output)
+{
+    TrainingPairVectorType train_pairs;
+
+    boost::filesystem::path input_path(input);
+    boost::filesystem::path output_path(output);
+    int input_file_count = std::distance(boost::filesystem::directory_iterator(input_path),
+                                         boost::filesystem::directory_iterator());
+    int output_file_count = std::distance(boost::filesystem::directory_iterator(output_path),
+                                          boost::filesystem::directory_iterator());
+
+    //std::cout << std::endl;
+    //std::cout << input_path << std::endl;
+    //std::cout << input_file_count << std::endl;
+    //std::cout << output_file_count << std::endl;
+
+    assert(input_file_count == output_file_count);
+    int file_count = input_file_count;
+
+    // Loop over all files
+    for(unsigned int itr_file = 0; itr_file < file_count; ++itr_file)
+    {
+        char fname[20];
+        int n = sprintf(fname, "%05d", itr_file);
+
+        // Read data
+        ImageType::Pointer input_image = ReadImage<ImageType>(input + "/" + fname + ".png");
+        DisplacementType::Pointer output_image = ReadImage<DisplacementType>(output + "/" + fname + ".vtk");
+
+        // Define data dimensions
+        typename ImageType::SizeType input_size = input_image->GetLargestPossibleRegion().GetSize();
+        typename DisplacementType::SizeType output_size = output_image->GetLargestPossibleRegion().GetSize();
+
+        static unsigned int input_dim = input_size.GetSizeDimension();
+        static unsigned int output_dim = output_size.GetSizeDimension();
+
+        unsigned int input_vector_size = 1;
+        unsigned int output_vector_size = TRANSFORM_DIMENSIONS;
+
+        for(int itr_dim = 0; itr_dim < input_dim; ++itr_dim)
+        {
+            input_vector_size *= input_size[itr_dim];
+        }
+
+        for(int itr_dim = 0; itr_dim < output_dim; ++itr_dim)
+        {
+            output_vector_size *= output_size[itr_dim];
+        }
+
+//        std::cout << input_dim << std::endl;
+//        std::cout << output_dim << std::endl;
+//        std::cout << input_size << "\t" << input_vector_size << std::endl;
+//        std::cout << output_size << "\t" << output_vector_size << std::endl;
+
+        // Fill Eigen vector with data
+        itk::ImageRegionConstIterator<ImageType> input_iterator(input_image, input_image->GetRequestedRegion());
+        itk::ImageRegionConstIterator<DisplacementType> output_iterator(output_image, output_image->GetRequestedRegion());
+
+        VectorType v_input = VectorType::Zero(input_vector_size);
+        VectorType v_output = VectorType::Zero(output_vector_size);
+
+        // input vector
+        input_iterator.GoToBegin();
+        unsigned long counter = 0;
+        while(!input_iterator.IsAtEnd())
+        {
+            double number = input_iterator.Get();
+            v_input[counter] = number;
+            ++counter;
+            ++input_iterator;
+        }
+
+        // output vector
+        output_iterator.GoToBegin();
+        counter = 0;
+        while(!output_iterator.IsAtEnd())
+        {
+            auto pixel = output_iterator.Get();
+            for (int itr_df = 0; itr_df < TRANSFORM_DIMENSIONS; ++itr_df)
+            {
+                v_output[counter] = pixel[itr_df];
+                ++counter;
+            }
+            ++output_iterator;
+        }
+
+        train_pairs.push_back(std::make_pair(v_input, v_output));
+
+    } // end for all files
+
+    return train_pairs;
+}
+
+
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process training app:" << std::endl;
 
-    if(argc!=5){
-        std::cout << "Usage: " << argv[0] << " data.csv kernel_string data_noise output_gp" << std::endl;
+    if(argc!=6){
+        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp" << std::endl;
 
-        std::cout << std::endl << "Example of a kernel string: GaussianKernel(2.3, 1.0,)" << std::endl;
-        std::cout << "Example of an input file:" << std::endl;
-        std::cout << "4 2" << std::endl;
-        std::cout << "x0 x1 x2 x3 y0 y1" << std::endl;
-        std::cout << " .... " << std::endl;
+        //        std::cout << "Usage: " << argv[0] << " data.csv kernel_string data_noise output_gp" << std::endl;
+
+        //        std::cout << std::endl << "Example of a kernel string: GaussianKernel(2.3, 1.0,)" << std::endl;
+        //        std::cout << "Example of an input file:" << std::endl;
+        //        std::cout << "4 2" << std::endl;
+        //        std::cout << "x0 x1 x2 x3 y0 y1" << std::endl;
+        //        std::cout << " .... " << std::endl;
         return -1;
     }
 
-    std::string data_filename = argv[1];
-    std::string kernel_string = argv[2];
+    std::string input_filename = argv[1];
+    std::string output_filename = argv[2];
+    std::string kernel_string = argv[3];
     double gp_sigma;
-    std::stringstream ss; ss << argv[3]; ss >> gp_sigma;
-    std::string output_prefix = argv[4];
+    std::stringstream ss; ss << argv[4]; ss >> gp_sigma;
+    std::string output_prefix = argv[5];
 
+    //    std::string data_filename = argv[1];
+    //    std::string kernel_string = argv[2];
+    //    double gp_sigma;
+    //    std::stringstream ss; ss << argv[3]; ss >> gp_sigma;
+    //    std::string output_prefix = argv[4];
 
-    std::cout << "Configuration: " << std::endl;
-    std::cout << " - data: " << data_filename << std::endl;
-    std::cout << " - kernel string: " << kernel_string << std::endl;
-    std::cout << " - data noise: " << gp_sigma << std::endl;
-    std::cout << " - output: " << output_prefix << std::endl << std::endl;
+    //    std::cout << "Configuration: " << std::endl;
+    //    std::cout << " - data: " << data_filename << std::endl;
+    //    std::cout << " - kernel string: " << kernel_string << std::endl;
+    //    std::cout << " - data noise: " << gp_sigma << std::endl;
+    //    std::cout << " - output: " << output_prefix << std::endl << std::endl;
 
     try{
         std::cout << "Parsing data... " << std::flush;
@@ -130,7 +242,8 @@ int main (int argc, char *argv[]){
         gp->SetSigma(gp_sigma);
 
         std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
-        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
+        //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
+        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
         for(const auto &tp : train_pairs){
             gp->AddSample(tp.first, tp.second);
         }
