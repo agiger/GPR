@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import shutil
 from shutil import copyfile
 
 import numpy as np
@@ -36,7 +37,12 @@ if __name__ == "__main__":
     if not os.path.exists(opt_data.input_dir):
         sys.exit('Path to data files does not exist.')
 
-    os.makedirs(opt_data.output_dir, exist_ok=True)
+    if os.path.isdir(opt_data.output_dir):
+        if os.path.isdir(os.path.join(opt_data.output_dir, 'sorted')):
+            shutil.rmtree(os.path.join(opt_data.output_dir, 'sorted'))
+        [os.remove(os.path.join(opt_data.output_dir, f)) for f in os.listdir(opt_data.output_dir)]
+    else:
+        os.makedirs(opt_data.output_dir)
 
     data_loader = DicomLoader(opt_data)
     data_loader.preprocess()
@@ -89,7 +95,10 @@ if __name__ == "__main__":
     stacking_exe = os.path.join(args.project_root, 'ImageStacking4dMRI', 'build', 'ims4dMRI')
     stacking_cmd = ' '.join([stacking_exe, stacking_pars])
 
-    os.makedirs(stack_dir, exist_ok=True)
+    if os.path.isdir(stack_dir):
+        [os.remove(os.path.join(stack_dir, f)) for f in os.listdir(stack_dir)]
+    else:
+        os.makedirs(stack_dir)
     os.system(stacking_cmd)
     print('[done]')
 
@@ -132,14 +141,19 @@ if __name__ == "__main__":
     registration3d_par_list.append('-regGraphMeanEdge')
     registration3d_par_list.append('-verbose')
     registration3d_par_list.append('-cudaDeviceId 0')
-    registration3d_par_list.append('-writeFlagFile')
 
     # Pairwise registration
     warped_dir = os.path.join(registration3d_dir, 'warpedImage')
-    os.makedirs(warped_dir, exist_ok=True)
+    if os.path.isdir(warped_dir):
+        [os.remove(os.path.join(warped_dir, f)) for f in os.listdir(warped_dir)]
+    else:
+        os.makedirs(warped_dir)
 
     dfs_dir = os.path.join(registration3d_dir, 'dfs')
-    os.makedirs(dfs_dir, exist_ok=True)
+    if os.path.isdir(dfs_dir):
+        [os.remove(os.path.join(dfs_dir, f)) for f in os.listdir(dfs_dir)]
+    else:
+        os.makedirs(dfs_dir)
 
     targets = sorted([os.path.join(stack_dir, i) for i in os.listdir(stack_dir) if i.startswith('vol')])
     print('Registration 3d: Number of target images: ' + str(len(targets)))
@@ -156,11 +170,11 @@ if __name__ == "__main__":
         # save registration result
         result_dir = os.path.join(registration3d_dir, "vtk")
         warped = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("warpedImage_")])
-        warped_copy = os.path.join(warped_dir, ("%05d.vtk" % itr))
+        warped_copy = os.path.join(warped_dir, ("warpedImg%05d.vtk" % itr))
         copyfile(warped[-1], warped_copy)
 
         df = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("displacement_")])
-        df_copy = os.path.join(dfs_dir, ("%05d.vtk" % itr))
+        df_copy = os.path.join(dfs_dir, ("dfReg%05d.vtk" % itr))
         copyfile(df[-1], df_copy)
     print('[done]')
 
@@ -218,13 +232,16 @@ if __name__ == "__main__":
     #### GP Regression ####
     print('GP REGRESSION...')
     gp_dir = os.path.join(registration3d_dir, 'gpr')
-    gp_dir_pred = os.path.join(registration3d_dir, 'prediction')
-
-    if not os.path.isdir(gp_dir):
+    if os.path.isdir(gp_dir):
+        [os.remove(os.path.join(gp_dir, f)) for f in os.listdir(gp_dir)]
+    else:
         os.makedirs(gp_dir)
-        gp_dir = os.path.join(gp_dir, 'gpr')
+    gp_dir = os.path.join(gp_dir, 'gpr')
 
-    if not os.path.isdir(gp_dir_pred):
+    gp_dir_pred = os.path.join(registration3d_dir, 'prediction')
+    if os.path.isdir(gp_dir_pred):
+        [os.remove(os.path.join(gp_dir_pred, f)) for f in os.listdir(gp_dir_pred)]
+    else:
         os.makedirs(gp_dir_pred)
 
     # learn
@@ -236,7 +253,6 @@ if __name__ == "__main__":
     gp_learn_par_list.append(kernel_string)
     gp_learn_par_list.append(data_noise)
     gp_learn_par_list.append(gp_dir)
-    print(gp_dir)
 
     gp_learn_pars = ' '.join(gp_learn_par_list)
     gp_learn_exe = os.path.join(args.project_root, 'GPR', 'build', 'apps', 'gpLearn')
@@ -244,10 +260,10 @@ if __name__ == "__main__":
     os.system(gp_learn_cmd)
 
     # predict
-    print(gp_dir)
     gp_predict_par_list = []
     gp_predict_par_list.append(gp_dir)
     gp_predict_par_list.append(os.path.join(surrogate_dir, 'test'))
+    # gp_predict_par_list.append(os.path.join(surrogate_dir, 'train'))
     gp_predict_par_list.append(gp_dir_pred)
     gp_predict_par_list.append(os.path.join(stack_dir, args.master_volume))
 
@@ -266,8 +282,10 @@ if __name__ == "__main__":
 
     # Compute difference between ground-truth and gpr prediction
     dfs_test_dir = os.path.join(dfs_dir, 'test')
+    # dfs_test_dir = os.path.join(dfs_dir, 'train')
     dfs_true = sorted([os.path.join(dfs_test_dir, i) for i in os.listdir(dfs_test_dir) if i.endswith(args.output_format)])
     warped_test_dir = os.path.join(warped_dir, 'test')
+    # warped_test_dir = os.path.join(warped_dir, 'train')
     warped_true = sorted([os.path.join(warped_test_dir, i) for i in os.listdir(warped_test_dir)
                           if i.endswith(args.output_format)])
     stacks_true = sorted([os.path.join(stack_dir, i) for i in os.listdir(stack_dir) if i.startswith('vol')])
@@ -276,10 +294,10 @@ if __name__ == "__main__":
     warped_pred = sorted([os.path.join(gp_dir_pred, i) for i in os.listdir(gp_dir_pred) if i.startswith('warpedImg')])
 
     # print(dfs_true)
-    #print(dfs_pred)
+    # print(dfs_pred)
+    # print(stacks_true)
     # print(warped_true)
-    #print(warped_pred)
-    #print(stacks_true)
+    # print(warped_pred)
 
     for itr in range(0, len(dfs_true)):
         # read images
@@ -291,42 +309,26 @@ if __name__ == "__main__":
             'df_pred': sitk.ReadImage(dfs_pred[itr])
         }
 
-        # Option1: overwrite sitk images and save the information below
-        # Option2: keep sitk images in dict, and automatically convert np to itk in a loop over the dict
-        #origin = sitk_stack_true.GetOrigin()
-        #spacing = sitk_stack_true.GetSpacing()
-        #direction = sitk_stack_true.GetDirection()
-
-
         # Convert sitk to np
         np_imgs = {}
         for name, img in sitk_imgs.items():
             np_imgs[name] = sitk.GetArrayFromImage(img)
 
         # Qualitative comparison
-        np_diff_stack = np.absolute(np_imgs['stack_true'] - np_imgs['warped_pred'])
-        np_diff_warped = np.absolute(np_imgs['warped_true'] - np_imgs['warped_pred'])
-        np_diff_df = np_imgs['df_true'] - np_imgs['df_pred']
+        np_diff = {
+            'stack': np.absolute(np_imgs['stack_true'] - np_imgs['warped_pred']),
+            'warped': np.absolute(np_imgs['warped_true']*4095 - np_imgs['warped_pred']),
+            'df': np_imgs['df_true'] - np_imgs['df_pred']
+        }
 
-        # loop?
-        sitk_diff_stack = sitk.GetImageFromArray(np_diff_stack)
-        sitk_diff_stack.SetDirection(sitk_imgs['stack_true'].GetDirection())
-        sitk_diff_stack.SetSpacing(sitk_imgs['stack_true'].GetSpacing())
-        sitk_diff_stack.SetOrigin(sitk_imgs['stack_true'].GetOrigin())
+        sitk_diff = {}
+        for name, img in np_diff.items():
+            diff = sitk.GetImageFromArray(img)
+            diff.SetDirection(sitk_imgs[name + '_true'].GetDirection())
+            diff.SetSpacing(sitk_imgs[name + '_true'].GetSpacing())
+            diff.SetOrigin(sitk_imgs[name + '_true'].GetOrigin())
 
-        sitk_diff_warped = sitk.GetImageFromArray(np_diff_warped)
-        sitk_diff_warped.SetDirection(sitk_imgs['warped_true'].GetDirection())
-        sitk_diff_warped.SetSpacing(sitk_imgs['warped_true'].GetSpacing())
-        sitk_diff_warped.SetOrigin(sitk_imgs['warped_true'].GetOrigin())
-
-        sitk_diff_df = sitk.GetImageFromArray(np_diff_df)
-        sitk_diff_df.SetDirection(sitk_imgs['df_true'].GetDirection())
-        sitk_diff_df.SetSpacing(sitk_imgs['df_true'].GetSpacing())
-        sitk_diff_df.SetOrigin(sitk_imgs['df_true'].GetOrigin())
-
-        # TODO: enumerate result!!!!
-        sitk.WriteImage(sitk_diff_stack, os.path.join(result_dir, ('diff_stack%05d.vtk' % itr)))
-        sitk.WriteImage(sitk_diff_stack, os.path.join(result_dir, ('diff_warped%05d.vtk' % itr)))
-        sitk.WriteImage(sitk_diff_df, os.path.join(result_dir, ('diff_df%05d.vtk' % itr)))
+            sitk_diff[name] = diff
+            sitk.WriteImage(diff, os.path.join(result_dir, ('diff_' + name + '%05d.vtk' % itr)))
 
     print('[done]')
