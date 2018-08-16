@@ -1,31 +1,64 @@
 # Options
 options:
-   preprocess: True
-   perform_reg2d: True
-   stack_4dmri: True
-   perform_reg3d: False
-   regression: False
-   evaluation: False
-   clear_data: False
+   preprocessing: True
+   registration_2d: True
+   stacking: True
+   registration_3d: True
+   splitting_data: True
+   regression: True
+   evaluation: True
+
+# Executables
+exe:
+   stacking: '/home/alina/Projects/ImageStacking4dMRI/build/ims4dMRI'
+   registration_2d: '/home/alina/Projects/GraphDemons_3D/build_2d/gdr'
+   registration_3d: '/home/alina/Projects/GraphDemons_3D/build_3d/gdr'
+   regression_learn: '/home/alina/Projects/GPR/build/apps/gpLearn'
+   regression_predict: '/home/alina/Projects/GPR/build/apps/gpPredict'
+
 # General configuration
 general:
    surrogate_type: 1 #  0 - MR navigators, 1 - ultrasound
-   project_root: '/home/alina/Projects'
-   data_root: '/media/WDblue2/4DMRI/testCpp/zc_4dmri_ufssfp2_MK_Nav_F1'
-   data_folder: '22'
-   navi_folder: '23'
-   us_folder: 'us'
+   root_dir: '/media/WDblue2/4DMRI/testCpp/zc_4dmri_ufssfp2_MK_Nav_F1'
+   data_dir: '22'
+   navi_dir: '23'
+   us_dir: 'us'
    n_slices: 32
    n_sweeps: 11
    n_training_sweeps: 8
+   master_navi: 'navi00001.dcm'
    master_volume: 'vol0000.vtk'
    input_format: 'png'
    output_format: 'vtk'
-   clear_data: False
 
 # 2D Registration (for navis only)
 reg2d:
   - '-rescale'
+  - '-wVerbose'
+  - '-optIter=150'
+  - '-numScales 4'
+  - '-regName=graph'
+  - '-regKernelSizeMax=4,6,10'
+  - '-regKernelSizeMin=4,5,8'
+  - '-regDecayType=linear'
+  - '-regDecayRate=-0.02'
+  - '-optInitStep=0.8'
+  - '-optName=AGD'
+  - '-optGrad'
+  - '-metric=lccA'
+  - '-metricKernelSizeMax=2,4,8'
+  - '-metricKernelSizeMin=2,4,8'
+  - '-edgeName=id'
+  - '-edgeScaleIntens=15'
+  - '-edgeScaleDisplace=1'
+  - '-edgeDecayDomain=0.00003'
+  - '-edgeDetectNodeColapse'
+  - '-edgeNodeColapseMinVal=1'
+  - '-edgeNodeColapseNewEdgeVal=1'
+  - '-regStartEdgeUpdate=10'
+  - '-regGraphMeanEdge'
+  - '-writeDICOM'
+  - '-cudaDeviceId 0'
 
 # 3D Registration
 reg3d:
@@ -53,8 +86,7 @@ reg3d:
    - '-edgeNodeColapseNewEdgeVal=1'
    - '-regStartEdgeUpdate=10'
    - '-regGraphMeanEdge'
-   - '-verbose'
-   - '-cudeDeviceId 0'
+   - '-cudaDeviceId 0'
 
 # Gaussian Processes Regression (GPR)
 gpr:
