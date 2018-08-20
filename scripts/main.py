@@ -27,14 +27,12 @@ def pairwise_registration(dirs, par_list, master, refs, exe):
 
     # Pairwise registration
     if os.path.isdir(warped_dir):
-        [os.remove(os.path.join(warped_dir, f)) for f in os.listdir(warped_dir)]
-    else:
-        os.makedirs(warped_dir, exist_ok=True)
+        shutil.rmtree(warped_dir)
+    os.makedirs(warped_dir, exist_ok=True)
 
     if os.path.isdir(dfs_dir):
-        [os.remove(os.path.join(dfs_dir, f)) for f in os.listdir(dfs_dir)]
-    else:
-        os.makedirs(dfs_dir, exist_ok=True)
+        shutil.rmtree(dfs_dir)
+    os.makedirs(dfs_dir, exist_ok=True)
 
     for itr, ref in enumerate(refs):
         current_par_list = par_list.copy()
@@ -53,7 +51,6 @@ def pairwise_registration(dirs, par_list, master, refs, exe):
         df = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("displacement_")])
         df_copy = os.path.join(dfs_dir, ("dfReg%05d.vtk" % itr))
         copyfile(df[-1], df_copy)
-    print('[done]')
 
 
 if __name__ == "__main__":
@@ -74,7 +71,7 @@ if __name__ == "__main__":
     # Preprocessing
     # ----------------------------------------------------------
     # Parse data files
-    opt_data = cfg_general
+    opt_data = Namespace(**cfg['general'])
     opt_data.is_navi = False
     opt_data.input_dir = os.path.join(opt_data.root_dir, opt_data.data_dir)
     opt_data.output_dir = os.path.join(opt_data.root_dir, opt_data.data_dir + "_mod")
@@ -98,7 +95,7 @@ if __name__ == "__main__":
 
     # Parse navi if required
     if cfg_general.surrogate_type == 0:
-        opt_navi = cfg_general
+        opt_navi = Namespace(**cfg['general'])
         opt_navi.is_navi = True
         opt_navi.input_dir = os.path.join(opt_navi.root_dir, opt_navi.navi_dir)
         opt_navi.output_dir = os.path.join(opt_navi.root_dir, opt_navi.navi_dir + "_mod")
@@ -139,14 +136,14 @@ if __name__ == "__main__":
     stacking_par_list = []
     if cfg_general.surrogate_type == 0:
         stack_dir = os.path.join(cfg_general.root_dir, 'stacks_navi')
-        surrogate_dir = os.path.join(cfg_general.root_dir, 'reg_2d/vtk/displacement_3.vtk')  # TODO
+        surrogate_dir = os.path.join(registration2d_dir, 'dfs')
         stacking_method = 'vonSiebenthal'
+        series_format = 'dfReg%05d.vtk'
     elif cfg_general.surrogate_type == 1:
         stack_dir = os.path.join(cfg_general.root_dir, 'stacks_us')
         surrogate_dir = os.path.join(cfg_general.root_dir, cfg_general.us_dir)
         stacking_method = 'ultrasound'
-        stacking_par_list.append('-startUsIndex 0')
-        stacking_par_list.append('-endUsIndex ' + str(cfg_general.n_sweeps * cfg_general.n_slices - 1))
+        series_format = '%05d.png'
     else:
         sys.exit('Surrogate not correctly defined')
 
@@ -157,6 +154,9 @@ if __name__ == "__main__":
     if opt.stacking:
         print('STACKING...')
         stacking_par_list.append('-surrogate ' + surrogate_dir)
+        stacking_par_list.append('-startIndex 0')
+        stacking_par_list.append('-endIndex ' + str(cfg_general.n_sweeps * cfg_general.n_slices - 1))
+        stacking_par_list.append('-seriesFormat ' + series_format)
         stacking_par_list.append('-o ' + stack_dir)
         stacking_par_list.append('-numberOfSweeps ' + str(cfg_general.n_sweeps))
         stacking_par_list.append('-numberOfSlicePos ' + str(cfg_general.n_slices))
