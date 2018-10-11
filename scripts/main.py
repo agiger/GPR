@@ -153,14 +153,14 @@ if __name__ == "__main__":
 
     if opt.stacking:
         print('STACKING...')
+        stacking_par_list.append('-o ' + stack_dir)
+        stacking_par_list.append('-data ' + opt_data.output_dir)
         stacking_par_list.append('-surrogate ' + surrogate_dir)
         stacking_par_list.append('-startIndex 0')
         stacking_par_list.append('-endIndex ' + str(cfg_general.n_sweeps * cfg_general.n_slices - 1))
         stacking_par_list.append('-seriesFormat ' + series_format)
-        stacking_par_list.append('-o ' + stack_dir)
         stacking_par_list.append('-numberOfSweeps ' + str(cfg_general.n_sweeps))
         stacking_par_list.append('-numberOfSlicePos ' + str(cfg_general.n_slices))
-        stacking_par_list.append('-dat ' + opt_data.output_dir)
         stacking_par_list.append('-stackingMethod ' + stacking_method)
         stacking_par_list.append('-save')
 
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     # ----------------------------------------------------------
     # Split data into training and test set
     # ----------------------------------------------------------
-    if opt.splitting_data or opt.registration_2d or opt.registration_3d:
+    if opt.splitting_data or ((opt.registration_2d or opt.registration_3d) and opt.regression):
         print('SPLITTING...')
         n_imgs = cfg_general.n_sweeps*cfg_general.n_slices
         n_training_imgs = cfg_general.n_training_sweeps*cfg_general.n_slices
