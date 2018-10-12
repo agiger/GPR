@@ -27,6 +27,7 @@
 #include "GaussianProcess.h"
 #include "Kernel.h"
 
+#include "DataParser.h"
 #include "itkUtils.h"
 #include "boost/filesystem.hpp"
 
@@ -41,9 +42,12 @@ typedef std::shared_ptr<KernelType>             KernelTypePointer;
 typedef std::vector<VectorType>                 TestVectorType;
 
 // ITK typedefs
-typedef itk::Image<unsigned char, 2> ImageType;
-typedef itk::Image<double, 3> MasterImageType;
-typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS> DisplacementType;
+typedef itk::Image<unsigned char, 2>            ImageType;
+typedef itk::Image<double, 3>                   MasterImageType;
+typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS>     DisplacementType;
+
+typedef DataParser<double, ImageType, DisplacementType >           DataParserType;
+typedef std::shared_ptr<DataParserType>         DataParserTypePointer;
 
 // parsing data
 TestVectorType GetTestData(const std::string& filename){
@@ -233,6 +237,7 @@ int main (int argc, char *argv[]){
         gp->Load(gp_prefix);
 
         //        TestVectorType test_vectors = GetTestData(input_filename);
+//        DataParserTypePointer parser(new DataParserType(input_dir, ".png"));
         TestVectorType test_vectors = GetTestDataITK(input_dir);
         TestVectorType output_vectors;
         for(const auto v : test_vectors){

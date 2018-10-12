@@ -26,12 +26,14 @@
 #include "GaussianProcess.h"
 #include "KernelFactory.h"
 #include "Kernel.h"
+#include "DataParser.h"
 
 #include "itkUtils.h"
 #include "boost/filesystem.hpp"
 
 typedef gpr::GaussianProcess<double>            GaussianProcessType;
 typedef std::shared_ptr<GaussianProcessType>    GaussianProcessTypePointer;
+//typedef GaussianProcessType::Pointer          GaussianProcessTypePointer;
 typedef GaussianProcessType::VectorType         VectorType;
 typedef GaussianProcessType::MatrixType         MatrixType;
 
@@ -40,14 +42,18 @@ typedef std::shared_ptr<KernelType>             KernelTypePointer;
 
 typedef gpr::KernelFactory<double>              KernelFactoryType;
 
+typedef std::vector<VectorType>                 DataVectorType;
 typedef std::pair<VectorType, VectorType>       TrainingPairType;
 typedef std::vector<TrainingPairType>           TrainingPairVectorType;
 
 // ITK typedefs
-typedef itk::Image<unsigned char, 2> ImageType;
-typedef itk::Image<unsigned char, 3> ImageSeriesType;
-typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS> DisplacementType;
-typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS+1> DisplacementSeriesType;
+typedef itk::Image<unsigned char, IMAGE_DIMENSIONS>             ImageType;
+typedef itk::Image<unsigned char, IMAGE_DIMENSIONS+1>           ImageSeriesType;
+typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, TRANSFORM_DIMENSIONS>     DisplacementType;
+typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, TRANSFORM_DIMENSIONS+1>   DisplacementSeriesType;
+
+typedef DataParser<double, ImageType, DisplacementType>         DataParserType;
+typedef std::shared_ptr<DataParserType>                         DataParserTypePointer;
 
 // parsing data
 TrainingPairVectorType GetTrainingData(const std::string& filename){
@@ -112,10 +118,10 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
 
     boost::filesystem::path input_path(input);
     boost::filesystem::path output_path(output);
-    int input_file_count = std::distance(boost::filesystem::directory_iterator(input_path),
-                                         boost::filesystem::directory_iterator());
-    int output_file_count = std::distance(boost::filesystem::directory_iterator(output_path),
-                                          boost::filesystem::directory_iterator());
+    int input_file_count = static_cast<int>(std::distance(boost::filesystem::directory_iterator(input_path),
+                                         boost::filesystem::directory_iterator()));
+    int output_file_count = static_cast<int>(std::distance(boost::filesystem::directory_iterator(output_path),
+                                                           boost::filesystem::directory_iterator()));
 
     //std::cout << std::endl;
     //std::cout << input_path << std::endl;
@@ -123,13 +129,13 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
     //std::cout << output_file_count << std::endl;
 
     assert(input_file_count == output_file_count);
-    int file_count = input_file_count;
+    int file_count = static_cast<int>(input_file_count);
 
     // Loop over all files
     for(unsigned int itr_file = 0; itr_file < file_count; ++itr_file)
     {
         char fname[20];
-        int n = sprintf(fname, "%05d", itr_file);
+        sprintf(fname, "%05d", itr_file);
 
         // Read data
         ImageType::Pointer input_image = ReadImage<ImageType>(input + "/" + fname + ".png");
@@ -243,6 +249,10 @@ int main (int argc, char *argv[]){
 
         std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
+        DataParserTypePointer parser(new DataParserType(input_filename, output_filename));
+        DataVectorType input_files = parser->GetInputFiles();
+        DataVectorType output_files = parser->GetOutputFiles();
+
         TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
         for(const auto &tp : train_pairs){
             gp->AddSample(tp.first, tp.second);
