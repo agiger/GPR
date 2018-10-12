@@ -3,7 +3,7 @@ options:
    preprocessing: True
    registration_2d: True
    stacking: True
-   registration_3d: True
+   registration_3d: False
    splitting_data: True
    regression: True
    evaluation: True
@@ -18,7 +18,7 @@ exe:
 
 # General configuration
 general:
-   surrogate_type: 1 #  0 - MR navigators, 1 - ultrasound
+   surrogate_type: 0 #  0 - MR navigators, 1 - ultrasound
    root_dir: '/media/WDblue2/4DMRI/testCpp/zc_4dmri_ufssfp2_MK_Nav_F1'
    data_dir: '22'
    navi_dir: '23'
