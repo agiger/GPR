@@ -242,18 +242,19 @@ int main (int argc, char *argv[]){
     //    std::cout << " - output: " << output_prefix << std::endl << std::endl;
 
     try{
-        std::cout << "Parsing data... " << std::flush;
+        std::cout << "Initialize Gaussian process... " << std::flush;
         KernelTypePointer kernel = KernelFactoryType::GetKernel(kernel_string);
         GaussianProcessTypePointer gp(new GaussianProcessType(kernel));
         gp->SetSigma(gp_sigma);
 
-        std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
+        std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
-        DataParserTypePointer parser(new DataParserType(input_filename, output_filename));
-        DataVectorType input_files = parser->GetInputFiles();
-        DataVectorType output_files = parser->GetOutputFiles();
+        DataParserTypePointer parser(new DataParserType(input_filename, output_filename, output_prefix, 10, 15));
+        assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
+        TrainingPairVectorType train_pairs = parser->GetTrainingData();
 
-        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
+        std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
+//        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
         for(const auto &tp : train_pairs){
             gp->AddSample(tp.first, tp.second);
         }
