@@ -209,8 +209,8 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process training app:" << std::endl;
 
-    if(argc!=6){
-        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp" << std::endl;
+    if(argc!=8){
+        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp n_inputModes n_outputModes" << std::endl;
 
         //        std::cout << "Usage: " << argv[0] << " data.csv kernel_string data_noise output_gp" << std::endl;
 
@@ -228,6 +228,11 @@ int main (int argc, char *argv[]){
     double gp_sigma;
     std::stringstream ss; ss << argv[4]; ss >> gp_sigma;
     std::string output_prefix = argv[5];
+
+    int n_inputModes;
+    std::stringstream ss_nIn; ss_nIn << argv[6]; ss_nIn >> n_inputModes;
+    int n_outputModes;
+    std::stringstream ss_nOut; ss_nOut << argv[7]; ss_nOut >> n_outputModes;
 
     //    std::string data_filename = argv[1];
     //    std::string kernel_string = argv[2];
@@ -249,7 +254,7 @@ int main (int argc, char *argv[]){
 
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
-        DataParserTypePointer parser(new DataParserType(input_filename, output_filename, output_prefix, 10, 15));
+        DataParserTypePointer parser(new DataParserType(input_filename, output_filename, output_prefix, n_inputModes, n_outputModes));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 

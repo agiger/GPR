@@ -156,7 +156,6 @@ TestVectorType GetTestDataITK(const std::string& input)
     return test_vectors;
 }
 
-
 void SavePrediction(const TestVectorType& vectors, const std::string& output_dir,
                     const std::string& filename)
 //                    typename DisplacementType::SizeType size)
@@ -209,9 +208,10 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process prediction app:" << std::endl;
 
-    if(argc!=5){
+    if(argc!=7){
         //        std::cout << "Usage: " << argv[0] << " gp_prefix input.csv output.csv" << std::endl;
-        std::cout << "Usage: " << argv[0] << " gp_prefix input output reference" << std::endl;
+        std::cout << "Usage: " << argv[0] << " gp_prefix input output reference input_modes output_modes" << std::endl;
+        // TODO: remove input_modes + output_modes
         return -1;
     }
 
@@ -220,6 +220,14 @@ int main (int argc, char *argv[]){
     std::string input_dir= argv[++itr_argv];
     std::string output_dir = argv[++itr_argv];
     std::string reference = argv[++itr_argv];
+
+    // TODO: check if output_dir exists, if not -> create it
+
+    int n_inputModes;
+    std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
+    int n_outputModes;
+    std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
+
     //typename DisplacementType::SizeType size;
     //for (unsigned int itr_size = 0; itr_size < IMAGE_DIMENSIONS; ++itr_size)
     //{
@@ -230,22 +238,33 @@ int main (int argc, char *argv[]){
     // TODO: Define spacing for output images!!!
 
     try{
+        std::cout << "Initialize Gaussian process... " << std::flush;
         typedef gpr::WhiteKernel<double>            WhiteKernelType;
         typedef std::shared_ptr<WhiteKernelType>    WhiteKernelTypePointer;
         WhiteKernelTypePointer wk(new WhiteKernelType(1)); // dummy kernel
         GaussianProcessTypePointer gp(new GaussianProcessType(wk));
         gp->Load(gp_prefix);
 
+        std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
-//        DataParserTypePointer parser(new DataParserType(input_dir, ".png"));
-        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        TestVectorType output_vectors;
+        DataParserTypePointer parser(new DataParserType(input_dir, gp_prefix, n_inputModes, n_outputModes));
+        TestVectorType test_vectors = parser->GetTestData();
+        std::cout << "[done]" << std::endl;
+
+//        TestVectorType test_vectors = GetTestDataITK(input_dir);
+        TestVectorType predicted_features;
         for(const auto v : test_vectors){
             auto t0 = std::chrono::system_clock::now();
-            output_vectors.push_back(gp->Predict(v));
+            predicted_features.push_back(gp->Predict(v));
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }
+
+        // Perform PCA-1
+        // TODO: implement PCA-1
+//        TestVectorType output_vectors parser->GetResults(predicted_features);
+        TestVectorType output_vectors = parser->GetResults(predicted_features);
+
         SavePrediction(output_vectors, output_dir, reference);
     }
     catch(std::string &s){

@@ -48,7 +48,7 @@ public:
         m_numberOfPrincipalModesOutput= output_modes;
     }
 
-    DataParser(std::string input_path, std::string output_prefix)
+    DataParser(std::string input_path, std::string output_prefix, int input_modes, int output_modes)
     {
         isTraining = false;
         m_inputPath = input_path;
@@ -56,8 +56,8 @@ public:
         m_outputPrefix = output_prefix;
         m_inputFilecount = 0;
         m_outputFilecount = 0;
-        m_numberOfPrincipalModesInput = 5;
-        m_numberOfPrincipalModesOutput = 5;
+        m_numberOfPrincipalModesInput = input_modes;
+        m_numberOfPrincipalModesOutput = output_modes;
     }
 
     ~DataParser(){}
@@ -84,6 +84,15 @@ public:
         PcaFeatureExtractionForPrediction();
         CreateTestVector();
         return m_testVector;
+    }
+
+    TestVectorType GetResults(TestVectorType predicted_features)
+    {
+        m_testVector = predicted_features;
+        inversePca();
+        CreatePredictionVector();
+
+        return m_predictionVector;
     }
 
 protected:
@@ -161,14 +170,60 @@ protected:
 
     void PcaFeatureExtractionForPrediction()
     {
+        // Parse input files
+        ParseInputFiles();
+        ComputeInputMatrix();
 
+        // Read input mean and basis
+        std::string fname = m_outputPrefix + "-inputBasis.csv";
+        m_inputBasis = ReadFromCsvFile(fname);
+        std::cout << "m_inputBasis " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
+
+        fname = m_outputPrefix + "-inputMean.csv";
+        m_inputMean = ReadFromCsvFile(fname);
+        std::cout << "m_inputMean " << m_inputMean.rows() << "x" << m_inputMean.cols() << std::endl;
+
+        // Feature extraction
+        std::cout << "m_inputMatrix " << m_inputMatrix.rows() << "x" << m_inputMatrix.cols() << std::endl;
+        MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
+        m_inputFeatures = alignedInput.transpose() * m_inputBasis;
+
+        std::cout << "m_inputFeatures " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+    }
+
+    void inversePca()
+    {
+        // Parse output files
+        MatrixType outputFeatures(m_numberOfPrincipalModesOutput, m_testVector.size());
+        uint itr = 0;
+        for(const auto v : m_testVector)
+        {
+            std::cout << v.transpose() << std::endl;
+            outputFeatures.col(itr) = v;
+            itr++;
+        }
+        std::cout << "outputFeatures" << outputFeatures.rows() << "x" << outputFeatures.cols() << std::endl;
+
+        // Read output mean and basis
+        std::string fname = m_outputPrefix + "-outputBasis.csv";
+        m_outputBasis = ReadFromCsvFile(fname);
+//        std::cout << "outputBasis " << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
+
+        fname = m_outputPrefix + "-outputMean.csv";
+        m_outputMean = ReadFromCsvFile(fname);
+//        std::cout << "m_outputMean " << m_outputMean.rows() << "x" << m_outputMean.cols() << std::endl;
+
+        // inverse PCA
+        MatrixType alignedOutput = m_outputBasis * outputFeatures;
+//        std::cout << "alignedOutput" << alignedOutput.rows() << "x" << alignedOutput.cols() << std::endl;
+        m_outputMatrix =  alignedOutput.colwise() + m_outputMean;
+//        std::cout << "m_outputMatrix" << m_outputMatrix.rows() << "x" << m_outputMatrix.cols() << std::endl;
     }
 
     void WriteToCsvFile(std::string fname, MatrixType matrix)
     {
-        std::string filename = m_outputPrefix + "/" + fname;
+        std::string filename = m_outputPrefix + "-" + fname;
         std::ofstream file;
-//        file << matrix.format(CSVFormat());
 
         file.open(filename.c_str(), std::ios::out | std::ios::trunc);
         for(int i=0; i<matrix.rows(); ++i)
@@ -182,13 +237,37 @@ protected:
                 }
                 else
                 {
-//                    std::cout << value << ',';
                     file << value << ',';
                 }
             }
             file << '\n';
         }
         file.close();
+    }
+
+    MatrixType ReadFromCsvFile(const std::string & path) {
+        std::cout << "path: " << path << std::endl;
+        std::ifstream indata;
+        std::string line;
+        std::vector<double> values;
+        uint rows = 0;
+
+        indata.open(path);
+        while (std::getline(indata, line)) {
+            std::stringstream lineStream(line);
+            std::string cell;
+            while (std::getline(lineStream, cell, ',')) {
+                values.push_back(std::stod(cell));
+            }
+            ++rows;
+        }
+
+        uint cols = values.size()/rows;
+        std::cout << "values: " << values.size() << std::endl;
+        std::cout << "rows: " << rows << std::endl;
+        std::cout << "cols: " << cols << std::endl;
+
+        return Eigen::Map<MatrixType>(values.data(), rows, cols);
     }
 
     void CreateTrainingVectorPair()
@@ -205,8 +284,17 @@ protected:
     {
         for(unsigned int itr_file; itr_file < m_inputFilecount; ++itr_file)
         {
-            VectorType v_output = m_outputFeatures.row(itr_file);
-            m_testVector.push_back(v_output);
+            VectorType v_input = m_inputFeatures.row(itr_file);
+            m_testVector.push_back(v_input);
+        }
+    }
+
+    void CreatePredictionVector()
+    {
+        for(unsigned int itr_file; itr_file < m_outputMatrix.cols() ; ++itr_file)
+        {
+            VectorType v_prediction = m_outputMatrix.col(itr_file);
+            m_predictionVector.push_back(v_prediction);
         }
     }
 
@@ -356,7 +444,7 @@ private:
 
     TrainingPairVectorType m_trainingPairs;
     TestVectorType m_testVector;
-
+    TestVectorType m_predictionVector;
 };
 
 #endif // DATAPARSER_H
