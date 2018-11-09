@@ -32,6 +32,9 @@ public:
     typedef typename std::vector<TrainingPairType>          TrainingPairVectorType;
     typedef typename std::vector<VectorType>                TestVectorType;
 
+    typedef itk::Image<unsigned char, IMAGE_DIMENSIONS>             ImageType;
+    typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, TRANSFORM_DIMENSIONS>     DisplacementImageType;
+
     typedef Eigen::JacobiSVD<MatrixType>                    JacobiSVDType;
     typedef Eigen::BDCSVD<MatrixType>                       BDCSVDType;
 
@@ -76,6 +79,8 @@ public:
     {
         PcaFeatureExtractionForTraining();
         CreateTrainingVectorPair();
+        SaveInputBasisAsImage();
+        SaveOutputBasisAsImage();
         return m_trainingPairs;
     }
 
@@ -177,28 +182,28 @@ protected:
         // Read input mean and basis
         std::string fname = m_outputPrefix + "-inputBasis.csv";
         m_inputBasis = ReadFromCsvFile(fname);
-        std::cout << "m_inputBasis " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
+//        std::cout << "m_inputBasis " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
 
         fname = m_outputPrefix + "-inputMean.csv";
         m_inputMean = ReadFromCsvFile(fname);
-        std::cout << "m_inputMean " << m_inputMean.rows() << "x" << m_inputMean.cols() << std::endl;
+//        std::cout << "m_inputMean " << m_inputMean.rows() << "x" << m_inputMean.cols() << std::endl;
 
         // Feature extraction
-        std::cout << "m_inputMatrix " << m_inputMatrix.rows() << "x" << m_inputMatrix.cols() << std::endl;
+//        std::cout << "m_inputMatrix " << m_inputMatrix.rows() << "x" << m_inputMatrix.cols() << std::endl;
         MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
 
-        std::cout << "m_inputFeatures " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+//        std::cout << "m_inputFeatures " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
     }
 
     void inversePca()
     {
         // Parse output files
         MatrixType outputFeatures(m_numberOfPrincipalModesOutput, m_testVector.size());
-        uint itr = 0;
+        unsigned int itr = 0;
         for(const auto v : m_testVector)
         {
-            std::cout << v.transpose() << std::endl;
+//            std::cout << v.transpose() << std::endl;
             outputFeatures.col(itr) = v;
             itr++;
         }
@@ -250,7 +255,7 @@ protected:
         std::ifstream indata;
         std::string line;
         std::vector<double> values;
-        uint rows = 0;
+        unsigned int rows = 0;
 
         indata.open(path);
         while (std::getline(indata, line)) {
@@ -262,7 +267,7 @@ protected:
             ++rows;
         }
 
-        uint cols = values.size()/rows;
+        unsigned int cols = values.size()/rows;
         std::cout << "values: " << values.size() << std::endl;
         std::cout << "rows: " << rows << std::endl;
         std::cout << "cols: " << cols << std::endl;
@@ -412,6 +417,82 @@ protected:
 
         return;
     }
+
+    void SaveInputBasisAsImage()
+    {
+        ImageType::Pointer reference = ReadImage<ImageType>(m_inputPath + "/00000.png");
+        ImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
+        ImageType::SpacingType spacing = reference->GetSpacing();
+        ImageType::DirectionType direction = reference->GetDirection();
+        ImageType::PointType origin = reference->GetOrigin();
+
+        for(unsigned int itr_basis = 0; itr_basis < m_outputBasis.cols(); itr_basis++)
+        {
+            VectorType v_image = m_inputBasis.col(itr_basis);
+
+            typename ImageType::Pointer basis_image = CreateImage<ImageType>(size);
+            basis_image->SetSpacing(spacing);
+            basis_image->SetOrigin(origin);
+            basis_image->SetDirection(direction);
+            itk::ImageRegionIterator<ImageType> basis_iterator(basis_image, basis_image->GetRequestedRegion());
+
+            unsigned long counter_v = 0;
+            while(!basis_iterator.IsAtEnd())
+            {
+                typename ImageType::PixelType value = v_image[counter_v];
+                basis_iterator.Set(value);
+                ++basis_iterator;
+                ++counter_v;
+            }
+
+            // Write predicted df and warped reference
+            char filename_df[20];
+            int n = sprintf(filename_df, "inputBasis%03d.vtk", itr_basis);
+            std::string output_path = m_outputPrefix + "-" + filename_df;
+            WriteImage<ImageType>(basis_image, output_path);
+        }
+    }
+
+    void SaveOutputBasisAsImage()
+    {
+        DisplacementImageType::Pointer reference = ReadImage<DisplacementImageType>(m_outputPath + "/00000.vtk");
+        DisplacementImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
+        DisplacementImageType::SpacingType spacing = reference->GetSpacing();
+        DisplacementImageType::DirectionType direction = reference->GetDirection();
+        DisplacementImageType::PointType origin = reference->GetOrigin();
+
+        for(unsigned int itr_basis = 0; itr_basis < m_outputBasis.cols(); itr_basis++)
+        {
+            VectorType v_image = m_outputBasis.col(itr_basis);
+
+            typename DisplacementImageType::Pointer output_df = CreateDisplacement<DisplacementImageType>(size);
+            output_df->SetSpacing(spacing);
+            output_df->SetOrigin(origin);
+            output_df->SetDirection(direction);
+            itk::ImageRegionIterator<DisplacementImageType> output_iterator(output_df, output_df->GetRequestedRegion());
+
+            unsigned long counter_v = 0;
+            while(!output_iterator.IsAtEnd())
+            {
+                typename DisplacementImageType::PixelType df;
+                for (int itr_dim = 0; itr_dim < TRANSFORM_DIMENSIONS; ++itr_dim)
+                {
+                    df[itr_dim] = v_image[counter_v];
+                    ++counter_v;
+                }
+
+                output_iterator.Set(df);
+                ++output_iterator;
+            }
+
+            // Write predicted df and warped reference
+            char filename_df[20];
+            int n = sprintf(filename_df, "outputBasis%03d.vtk", itr_basis);
+            std::string output_path = m_outputPrefix + "-" + filename_df;
+            WriteImage<DisplacementImageType>(output_df, output_path);
+        }
+    }
+
 
 private:
     bool isTraining;

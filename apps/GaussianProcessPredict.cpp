@@ -247,11 +247,11 @@ int main (int argc, char *argv[]){
 
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
+        //        TestVectorType test_vectors = GetTestDataITK(input_dir);
         DataParserTypePointer parser(new DataParserType(input_dir, gp_prefix, n_inputModes, n_outputModes));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
-//        TestVectorType test_vectors = GetTestDataITK(input_dir);
         TestVectorType predicted_features;
         for(const auto v : test_vectors){
             auto t0 = std::chrono::system_clock::now();
@@ -261,10 +261,7 @@ int main (int argc, char *argv[]){
         }
 
         // Perform PCA-1
-        // TODO: implement PCA-1
-//        TestVectorType output_vectors parser->GetResults(predicted_features);
         TestVectorType output_vectors = parser->GetResults(predicted_features);
-
         SavePrediction(output_vectors, output_dir, reference);
     }
     catch(std::string &s){

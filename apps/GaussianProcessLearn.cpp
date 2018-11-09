@@ -119,7 +119,7 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
     boost::filesystem::path input_path(input);
     boost::filesystem::path output_path(output);
     int input_file_count = static_cast<int>(std::distance(boost::filesystem::directory_iterator(input_path),
-                                         boost::filesystem::directory_iterator()));
+                                                          boost::filesystem::directory_iterator()));
     int output_file_count = static_cast<int>(std::distance(boost::filesystem::directory_iterator(output_path),
                                                            boost::filesystem::directory_iterator()));
 
@@ -254,12 +254,12 @@ int main (int argc, char *argv[]){
 
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
+        //        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
         DataParserTypePointer parser(new DataParserType(input_filename, output_filename, output_prefix, n_inputModes, n_outputModes));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 
         std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
-//        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
         for(const auto &tp : train_pairs){
             gp->AddSample(tp.first, tp.second);
         }
