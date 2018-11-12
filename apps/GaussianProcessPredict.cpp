@@ -215,7 +215,7 @@ int main (int argc, char *argv[]){
         return -1;
     }
 
-    int itr_argv = 0;
+    unsigned int itr_argv = 0;
     std::string gp_prefix = argv[++itr_argv];
     std::string input_dir= argv[++itr_argv];
     std::string output_dir = argv[++itr_argv];

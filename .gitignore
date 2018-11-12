@@ -1,4 +1,7 @@
 CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles/
 build/
+build_17/
 .idea/
 cmake-build-debug/

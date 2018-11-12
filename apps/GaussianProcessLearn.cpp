@@ -222,17 +222,19 @@ int main (int argc, char *argv[]){
         return -1;
     }
 
-    std::string input_filename = argv[1];
-    std::string output_filename = argv[2];
-    std::string kernel_string = argv[3];
+    unsigned int itr_argv = 0;
+    std::string input_folder = argv[++itr_argv];
+    std::string output_folder = argv[++itr_argv];
+    std::string kernel_string = argv[++itr_argv];
     double gp_sigma;
-    std::stringstream ss; ss << argv[4]; ss >> gp_sigma;
-    std::string output_prefix = argv[5];
+    std::stringstream ss; ss << argv[++itr_argv]; ss >> gp_sigma;
+    std::string output_prefix = argv[++itr_argv];
 
     int n_inputModes;
-    std::stringstream ss_nIn; ss_nIn << argv[6]; ss_nIn >> n_inputModes;
+    std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
     int n_outputModes;
-    std::stringstream ss_nOut; ss_nOut << argv[7]; ss_nOut >> n_outputModes;
+    std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
+
 
     //    std::string data_filename = argv[1];
     //    std::string kernel_string = argv[2];
@@ -255,7 +257,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
         //        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
-        DataParserTypePointer parser(new DataParserType(input_filename, output_filename, output_prefix, n_inputModes, n_outputModes));
+        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 

@@ -7,13 +7,14 @@ Output * Comment
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <experimental/filesystem>
+//#include "boost/filesystem.hpp"
 
 #include <Eigen/SVD>
 #include <Eigen/Dense>
 #include "GaussianProcess.h"
 
 #include "itkUtils.h"
-#include "boost/filesystem.hpp"
 
 #ifndef DATAPARSER_H
 #define DATAPARSER_H
@@ -307,7 +308,7 @@ protected:
     {
         m_inputMatrix = MatrixType::Zero(m_inputVectorSize, m_inputFilecount);
         unsigned long counter = 0;
-        for(const auto& v : m_inputFiles)
+        for(const auto& v : m_inputVector)
         {
             for(unsigned int itr_pix = 0; itr_pix < m_inputVectorSize; ++itr_pix)
             {
@@ -322,7 +323,7 @@ protected:
     {
         m_outputMatrix = MatrixType::Zero(m_outputVectorSize, m_outputFilecount);
         unsigned long counter = 0;
-        for(const auto& v : m_outputFiles)
+        for(const auto& v : m_outputVector)
         {
             for(unsigned int itr_pix = 0; itr_pix < m_outputVectorSize; ++itr_pix)
             {
@@ -335,17 +336,19 @@ protected:
 
     void ParseInputFiles()
     {
-        boost::filesystem::path file_path(m_inputPath);
-        m_inputFilecount = static_cast<int>(std::distance(boost::filesystem::directory_iterator(file_path),
-                                                          boost::filesystem::directory_iterator()));
+        for(const auto & p : std::experimental::filesystem::directory_iterator(m_inputPath))
+        {
+            m_inputFiles.push_back(p.path().string());
+        }
+        sort(m_inputFiles.begin(), m_inputFiles.end());
+        m_inputFilecount = m_inputFiles.size();
 
         // Loop over all files
-        for(unsigned int itr_file = 0; itr_file < m_inputFilecount; ++itr_file) {
-            char fname[20];
-            sprintf(fname, "%05d", itr_file);
-
+        for(std::string & file : m_inputFiles)
+        {
             // Read data
-            typename TInputType::Pointer image = ReadImage<TInputType>(m_inputPath + "/" + fname + ".png");
+            std::cout << file << std::endl;
+            typename TInputType::Pointer image = ReadImage<TInputType>(file);
             typename TInputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
             static unsigned int image_dim = size.GetSizeDimension();
 
@@ -368,7 +371,7 @@ protected:
                 ++image_iterator;
             }
 
-            m_inputFiles.push_back(v);
+            m_inputVector.push_back(v);
         } // end for all files
 
         return;
@@ -376,17 +379,19 @@ protected:
 
     void ParseOutputFiles()
     {
-        boost::filesystem::path file_path(m_outputPath);
-        m_outputFilecount = static_cast<int>(std::distance(boost::filesystem::directory_iterator(file_path),
-                                                           boost::filesystem::directory_iterator()));
+        for(const auto & p : std::experimental::filesystem::directory_iterator(m_outputPath))
+        {
+            m_outputFiles.push_back(p.path().string());
+        }
+        sort(m_outputFiles.begin(), m_outputFiles.end());
+        m_outputFilecount = m_outputFiles.size();
 
         // Loop over all files
-        for(unsigned int itr_file = 0; itr_file < m_outputFilecount; ++itr_file) {
-            char fname[20];
-            sprintf(fname, "%05d", itr_file);
-
+        for(std::string & file : m_outputFiles)
+        {
             // Read data
-            typename TOutputType::Pointer image = ReadImage<TOutputType>(m_outputPath + "/" + fname + ".vtk");
+            std::cout << file << std::endl;
+            typename TOutputType::Pointer image = ReadImage<TOutputType>(file);
             typename TOutputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
             static unsigned int image_dim = size.GetSizeDimension();
 
@@ -412,7 +417,7 @@ protected:
                 ++image_iterator;
             }
 
-            m_outputFiles.push_back(v);
+            m_outputVector.push_back(v);
         } // end for all files
 
         return;
@@ -420,7 +425,7 @@ protected:
 
     void SaveInputBasisAsImage()
     {
-        ImageType::Pointer reference = ReadImage<ImageType>(m_inputPath + "/00000.png");
+        ImageType::Pointer reference = ReadImage<ImageType>(m_inputFiles.front());
         ImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
         ImageType::SpacingType spacing = reference->GetSpacing();
         ImageType::DirectionType direction = reference->GetDirection();
@@ -455,7 +460,7 @@ protected:
 
     void SaveOutputBasisAsImage()
     {
-        DisplacementImageType::Pointer reference = ReadImage<DisplacementImageType>(m_outputPath + "/00000.vtk");
+        DisplacementImageType::Pointer reference = ReadImage<DisplacementImageType>(m_outputFiles.front());
         DisplacementImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
         DisplacementImageType::SpacingType spacing = reference->GetSpacing();
         DisplacementImageType::DirectionType direction = reference->GetDirection();
@@ -505,8 +510,11 @@ private:
     int m_inputVectorSize;
     int m_outputVectorSize;
 
-    DataVectorType m_inputFiles;
-    DataVectorType m_outputFiles;
+    std::vector<std::string> m_inputFiles;
+    std::vector<std::string> m_outputFiles;
+
+    DataVectorType m_inputVector;
+    DataVectorType m_outputVector;
 
     MatrixType m_inputMatrix;
     MatrixType m_outputMatrix;

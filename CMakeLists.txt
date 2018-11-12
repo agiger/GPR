@@ -38,10 +38,11 @@ LINK_DIRECTORIES(
 	${Boost_LIBRARY_DIRS}
 	${ITK_LIBRARY_DIRS}
 	)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fext-numeric-literals")
-#SET(CMAKE_CXX_COMPILER "g++-5")
-#SET(CMAKE_C_COMPILER "gcc-5")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fext-numeric-literals -w")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fext-numeric-literals")
+SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fs")
+SET(CMAKE_CXX_COMPILER "g++-8")
+SET(CMAKE_C_COMPILER "gcc-8")
 
 FIND_PACKAGE( OpenMP REQUIRED)
 if(OPENMP_FOUND)
