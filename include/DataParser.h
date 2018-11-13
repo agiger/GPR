@@ -109,9 +109,6 @@ protected:
         ParseOutputFiles();
         assert(m_inputFilecount == m_outputFilecount); // use try catch instead
 
-        ComputeInputMatrix();
-        ComputeOutputMatrix();
-
         // Subtract Mean
         m_inputMean = m_inputMatrix.rowwise().mean();
         m_outputMean = m_outputMatrix.rowwise().mean();
@@ -123,6 +120,7 @@ protected:
         BDCSVDType outputSvd(alignedOutput, Eigen::ComputeThinU);
 
         // Compute Basis
+        std::cout << "Compute feature basis... " << std::flush;
         m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
         m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
 
@@ -131,6 +129,7 @@ protected:
 
         m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
         m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
+        std::cout << "[done]" << std::endl;
 
         //std::cout << std::endl;
         //std::cout << "ThinU: " << inputSvd.matrixU().rows() << "x" << inputSvd.matrixU().cols() << std::endl;
@@ -144,14 +143,12 @@ protected:
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
         m_outputFeatures = alignedOutput.transpose() * m_outputBasis;
 
-        std::cout << std::endl;
-        std::cout << "m_inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
-        std::cout << "m_outputFeatures: " << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
-
         WriteToCsvFile("inputBasis.csv", m_inputBasis);
         WriteToCsvFile("outputBasis.csv", m_outputBasis);
         WriteToCsvFile("inputMean.csv", m_inputMean);
         WriteToCsvFile("outputMean.csv", m_outputMean);
+        WriteToCsvFile("inputMatrix.csv", m_inputMatrix);
+        WriteToCsvFile("outputMatrix.csv", m_outputMatrix);
 
         // First approach
         //VectorType ones = VectorType::Constant(m_inputFilecount, 1, 1);
@@ -178,23 +175,17 @@ protected:
     {
         // Parse input files
         ParseInputFiles();
-        ComputeInputMatrix();
 
         // Read input mean and basis
         std::string fname = m_outputPrefix + "-inputBasis.csv";
         m_inputBasis = ReadFromCsvFile(fname);
-//        std::cout << "m_inputBasis " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
 
         fname = m_outputPrefix + "-inputMean.csv";
         m_inputMean = ReadFromCsvFile(fname);
-//        std::cout << "m_inputMean " << m_inputMean.rows() << "x" << m_inputMean.cols() << std::endl;
 
         // Feature extraction
-//        std::cout << "m_inputMatrix " << m_inputMatrix.rows() << "x" << m_inputMatrix.cols() << std::endl;
         MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
-
-//        std::cout << "m_inputFeatures " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
     }
 
     void inversePca()
@@ -204,26 +195,20 @@ protected:
         unsigned int itr = 0;
         for(const auto v : m_testVector)
         {
-//            std::cout << v.transpose() << std::endl;
             outputFeatures.col(itr) = v;
             itr++;
         }
-        std::cout << "outputFeatures" << outputFeatures.rows() << "x" << outputFeatures.cols() << std::endl;
 
         // Read output mean and basis
         std::string fname = m_outputPrefix + "-outputBasis.csv";
         m_outputBasis = ReadFromCsvFile(fname);
-//        std::cout << "outputBasis " << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
 
         fname = m_outputPrefix + "-outputMean.csv";
         m_outputMean = ReadFromCsvFile(fname);
-//        std::cout << "m_outputMean " << m_outputMean.rows() << "x" << m_outputMean.cols() << std::endl;
 
         // inverse PCA
         MatrixType alignedOutput = m_outputBasis * outputFeatures;
-//        std::cout << "alignedOutput" << alignedOutput.rows() << "x" << alignedOutput.cols() << std::endl;
         m_outputMatrix =  alignedOutput.colwise() + m_outputMean;
-//        std::cout << "m_outputMatrix" << m_outputMatrix.rows() << "x" << m_outputMatrix.cols() << std::endl;
     }
 
     void WriteToCsvFile(std::string fname, MatrixType matrix)
@@ -252,7 +237,6 @@ protected:
     }
 
     MatrixType ReadFromCsvFile(const std::string & path) {
-        std::cout << "path: " << path << std::endl;
         std::ifstream indata;
         std::string line;
         std::vector<double> values;
@@ -269,10 +253,6 @@ protected:
         }
 
         unsigned int cols = values.size()/rows;
-        std::cout << "values: " << values.size() << std::endl;
-        std::cout << "rows: " << rows << std::endl;
-        std::cout << "cols: " << cols << std::endl;
-
         return Eigen::Map<MatrixType>(values.data(), rows, cols);
     }
 
@@ -304,36 +284,6 @@ protected:
         }
     }
 
-    void ComputeInputMatrix()
-    {
-        m_inputMatrix = MatrixType::Zero(m_inputVectorSize, m_inputFilecount);
-        unsigned long counter = 0;
-        for(const auto& v : m_inputVector)
-        {
-            for(unsigned int itr_pix = 0; itr_pix < m_inputVectorSize; ++itr_pix)
-            {
-                m_inputMatrix(itr_pix, counter) = v(itr_pix);
-            }
-            ++counter;
-        }
-        return;
-    }
-
-    void ComputeOutputMatrix()
-    {
-        m_outputMatrix = MatrixType::Zero(m_outputVectorSize, m_outputFilecount);
-        unsigned long counter = 0;
-        for(const auto& v : m_outputVector)
-        {
-            for(unsigned int itr_pix = 0; itr_pix < m_outputVectorSize; ++itr_pix)
-            {
-                m_outputMatrix(itr_pix, counter) = v(itr_pix);
-            }
-            ++counter;
-        }
-        return;
-    }
-
     void ParseInputFiles()
     {
         for(const auto & p : std::experimental::filesystem::directory_iterator(m_inputPath))
@@ -343,35 +293,38 @@ protected:
         sort(m_inputFiles.begin(), m_inputFiles.end());
         m_inputFilecount = m_inputFiles.size();
 
+        // Identify vector size
+        typename TInputType::Pointer image = ReadImage<TInputType>(m_inputFiles.front());
+        typename TInputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
+        static unsigned int image_dim = size.GetSizeDimension();
+
+        m_inputVectorSize = 1;
+        for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
+            m_inputVectorSize *= size[itr_dim];
+        }
+
         // Loop over all files
+        unsigned int counter_file = 0;
+        m_inputMatrix = MatrixType::Zero(m_inputVectorSize, m_inputFilecount);
         for(std::string & file : m_inputFiles)
         {
             // Read data
             std::cout << file << std::endl;
             typename TInputType::Pointer image = ReadImage<TInputType>(file);
-            typename TInputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
-            static unsigned int image_dim = size.GetSizeDimension();
-
-            m_inputVectorSize = 1;
-            for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
-                m_inputVectorSize *= size[itr_dim];
-            }
 
             // Fill Eigen vector with data
             itk::ImageRegionConstIterator <TInputType> image_iterator(image, image->GetRequestedRegion());
-            VectorType v = VectorType::Zero(m_inputVectorSize);
 
             image_iterator.GoToBegin();
-            unsigned long counter = 0;
+            unsigned long counter_pix = 0;
             while (!image_iterator.IsAtEnd())
             {
                 auto pixel = image_iterator.Get();
-                v[counter] = pixel;
-                ++counter;
+                m_inputMatrix(counter_pix, counter_file) = pixel;
+                ++counter_pix;
                 ++image_iterator;
             }
-
-            m_inputVector.push_back(v);
+            ++counter_file;
         } // end for all files
 
         return;
@@ -386,38 +339,41 @@ protected:
         sort(m_outputFiles.begin(), m_outputFiles.end());
         m_outputFilecount = m_outputFiles.size();
 
+        // Identify vector size
+        typename TOutputType::Pointer image = ReadImage<TOutputType>(m_outputFiles.front());
+        typename TOutputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
+        static unsigned int image_dim = size.GetSizeDimension();
+
+        m_outputVectorSize = TRANSFORM_DIMENSIONS;
+        for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
+            m_outputVectorSize *= size[itr_dim];
+        }
+
         // Loop over all files
+        unsigned int counter_file = 0;
+        m_outputMatrix = MatrixType::Zero(m_outputVectorSize, m_outputFilecount);
         for(std::string & file : m_outputFiles)
         {
             // Read data
             std::cout << file << std::endl;
             typename TOutputType::Pointer image = ReadImage<TOutputType>(file);
-            typename TOutputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
-            static unsigned int image_dim = size.GetSizeDimension();
-
-            m_outputVectorSize = TRANSFORM_DIMENSIONS;
-            for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
-                m_outputVectorSize *= size[itr_dim];
-            }
 
             // Fill Eigen vector with data
             itk::ImageRegionConstIterator <TOutputType> image_iterator(image, image->GetRequestedRegion());
-            VectorType v = VectorType::Zero(m_outputVectorSize);
 
             image_iterator.GoToBegin();
-            unsigned long counter = 0;
+            unsigned long counter_pix = 0;
             while (!image_iterator.IsAtEnd())
             {
                 auto pixel = image_iterator.Get();
                 for (int itr_df = 0; itr_df < TRANSFORM_DIMENSIONS; ++itr_df)
                 {
-                    v[counter] = pixel[itr_df];
-                    ++counter;
+                    m_outputMatrix(counter_pix, counter_file) = pixel[itr_df];
+                    ++counter_pix;
                 }
                 ++image_iterator;
             }
-
-            m_outputVector.push_back(v);
+            ++counter_file;
         } // end for all files
 
         return;
@@ -512,9 +468,6 @@ private:
 
     std::vector<std::string> m_inputFiles;
     std::vector<std::string> m_outputFiles;
-
-    DataVectorType m_inputVector;
-    DataVectorType m_outputVector;
 
     MatrixType m_inputMatrix;
     MatrixType m_outputMatrix;
