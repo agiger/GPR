@@ -8,6 +8,7 @@ Output * Comment
 #include <iostream>
 #include <algorithm>
 #include <experimental/filesystem>
+#include <chrono>
 //#include "boost/filesystem.hpp"
 
 #include <Eigen/SVD>
@@ -78,15 +79,15 @@ public:
 
     TrainingPairVectorType& GetTrainingData()
     {
+        SetFilePaths();
         PcaFeatureExtractionForTraining();
         CreateTrainingVectorPair();
-        SaveInputBasisAsImage();
-        SaveOutputBasisAsImage();
         return m_trainingPairs;
     }
 
     TestVectorType& GetTestData()
     {
+        SetFilePaths();
         PcaFeatureExtractionForPrediction();
         CreateTestVector();
         return m_testVector;
@@ -94,7 +95,8 @@ public:
 
     TestVectorType GetResults(TestVectorType predicted_features)
     {
-        m_testVector = predicted_features;
+        SetFilePaths();
+        m_predictedFeatures = predicted_features;
         inversePca();
         CreatePredictionVector();
 
@@ -105,6 +107,8 @@ protected:
 
     void PcaFeatureExtractionForTraining()
     {
+        bool usePrecomputed = ( std::experimental::filesystem::exists(m_pathInputBasis) &&
+                                std::experimental::filesystem::exists(m_pathOutputBasis) );
         ParseInputFiles();
         ParseOutputFiles();
         assert(m_inputFilecount == m_outputFilecount); // use try catch instead
@@ -115,40 +119,53 @@ protected:
         MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
         MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
 
-         // Computing SVD
-        BDCSVDType inputSvd(alignedInput, Eigen::ComputeThinU);
-        BDCSVDType outputSvd(alignedOutput, Eigen::ComputeThinU);
+        if(!usePrecomputed)
+        {
+            // Computing SVD
+            auto t0 = std::chrono::system_clock::now();
+            BDCSVDType inputSvd(alignedInput, Eigen::ComputeThinU);
+            std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+            std::cout << "inputSvd done in " << elapsed_seconds.count() << "s" << std::endl;
 
-        // Compute Basis
-        std::cout << "Compute feature basis... " << std::flush;
-        m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
-        m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
+            t0 = std::chrono::system_clock::now();
+            BDCSVDType outputSvd(alignedOutput, Eigen::ComputeThinU);
+            elapsed_seconds = std::chrono::system_clock::now()-t0;
+            std::cout << "outputSvd done in " << elapsed_seconds.count() << "s" << std::endl;
 
-        MatrixType fullInputBasis = inputSvd.matrixU() * inputSvd.singularValues().cwiseSqrt().asDiagonal();
-        MatrixType fullOutputBasis = outputSvd.matrixU() * outputSvd.singularValues().cwiseSqrt().asDiagonal();
+            // Compute Basis
+            m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
+            m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
 
-        m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
-        m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
-        std::cout << "[done]" << std::endl;
+            MatrixType fullInputBasis = inputSvd.matrixU() * inputSvd.singularValues().cwiseSqrt().asDiagonal();
+            MatrixType fullOutputBasis = outputSvd.matrixU() * outputSvd.singularValues().cwiseSqrt().asDiagonal();
 
-        //std::cout << std::endl;
-        //std::cout << "ThinU: " << inputSvd.matrixU().rows() << "x" << inputSvd.matrixU().cols() << std::endl;
-        //std::cout << "SingularValues: " << inputSvd.singularValues().rows() << "x" << inputSvd.singularValues().cols() << std::endl;
-        //std::cout << "inputBasis: " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
-        //std::cout << "outputBasis: " << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
-        //std::cout << "alignedInput: " << alignedInput.rows() << "x" << alignedInput.cols() << std::endl;
-        //std::cout << "alignedOutput: " << alignedOutput.rows() << "x" << alignedOutput.cols() << std::endl;
+            m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
+            m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
+        }
+        else
+        {
+            // Read Basis
+            m_inputBasis = ReadFromCsvFile(m_pathInputBasis);
+            m_outputBasis = ReadFromCsvFile(m_pathOutputBasis);
+        }
 
         // Compute Features
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
         m_outputFeatures = alignedOutput.transpose() * m_outputBasis;
+        WriteToCsvFile(m_outputPrefix + "-inputFeatures.csv", m_inputFeatures);
+        WriteToCsvFile(m_outputPrefix + "-outputFeatures.csv", m_outputFeatures);
 
-        WriteToCsvFile("inputBasis.csv", m_inputBasis);
-        WriteToCsvFile("outputBasis.csv", m_outputBasis);
-        WriteToCsvFile("inputMean.csv", m_inputMean);
-        WriteToCsvFile("outputMean.csv", m_outputMean);
-        WriteToCsvFile("inputMatrix.csv", m_inputMatrix);
-        WriteToCsvFile("outputMatrix.csv", m_outputMatrix);
+        if(!usePrecomputed)
+        {
+            WriteToCsvFile(m_pathInputMean, m_inputMean);
+            WriteToCsvFile(m_pathOutputMean, m_outputMean);
+            WriteToCsvFile(m_pathInputBasis, m_inputBasis);
+            WriteToCsvFile(m_pathOutputBasis, m_outputBasis);
+            SaveInputMeanAsImage();
+            SaveOutputMeanAsImage();
+            SaveInputBasisAsImage();
+            SaveOutputBasisAsImage();
+        }
 
         // First approach
         //VectorType ones = VectorType::Constant(m_inputFilecount, 1, 1);
@@ -177,45 +194,39 @@ protected:
         ParseInputFiles();
 
         // Read input mean and basis
-        std::string fname = m_outputPrefix + "-inputBasis.csv";
-        m_inputBasis = ReadFromCsvFile(fname);
-
-        fname = m_outputPrefix + "-inputMean.csv";
-        m_inputMean = ReadFromCsvFile(fname);
+        m_inputBasis = ReadFromCsvFile(m_pathInputBasis);
+        m_inputMean = ReadFromCsvFile(m_pathInputMean);
 
         // Feature extraction
         MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
+        WriteToCsvFile(m_outputPrefix + "-inputFeatures_prediction.csv", m_inputFeatures);
     }
 
     void inversePca()
     {
         // Parse output files
-        MatrixType outputFeatures(m_numberOfPrincipalModesOutput, m_testVector.size());
+        MatrixType outputFeatures(m_numberOfPrincipalModesOutput, m_predictedFeatures.size());
         unsigned int itr = 0;
-        for(const auto v : m_testVector)
+        for(const auto v : m_predictedFeatures)
         {
             outputFeatures.col(itr) = v;
             itr++;
         }
 
         // Read output mean and basis
-        std::string fname = m_outputPrefix + "-outputBasis.csv";
-        m_outputBasis = ReadFromCsvFile(fname);
-
-        fname = m_outputPrefix + "-outputMean.csv";
-        m_outputMean = ReadFromCsvFile(fname);
+        m_outputBasis = ReadFromCsvFile(m_pathOutputBasis);
+        m_outputMean = ReadFromCsvFile(m_pathOutputMean);
 
         // inverse PCA
         MatrixType alignedOutput = m_outputBasis * outputFeatures;
-        m_outputMatrix =  alignedOutput.colwise() + m_outputMean;
+        m_predictedOutputMatrix =  alignedOutput.colwise() + m_outputMean;
+        WriteToCsvFile(m_outputPrefix + "-outputFeatures_prediction.csv", outputFeatures);
     }
 
-    void WriteToCsvFile(std::string fname, MatrixType matrix)
+    void WriteToCsvFile(std::string filename, MatrixType matrix)
     {
-        std::string filename = m_outputPrefix + "-" + fname;
         std::ofstream file;
-
         file.open(filename.c_str(), std::ios::out | std::ios::trunc);
         for(int i=0; i<matrix.rows(); ++i)
         {
@@ -234,6 +245,7 @@ protected:
             file << '\n';
         }
         file.close();
+        std::cout << filename << " has been written" << std::endl;
     }
 
     MatrixType ReadFromCsvFile(const std::string & path) {
@@ -277,9 +289,9 @@ protected:
 
     void CreatePredictionVector()
     {
-        for(unsigned int itr_file; itr_file < m_outputMatrix.cols() ; ++itr_file)
+        for(unsigned int itr_file; itr_file < m_predictedOutputMatrix.cols() ; ++itr_file)
         {
-            VectorType v_prediction = m_outputMatrix.col(itr_file);
+            VectorType v_prediction = m_predictedOutputMatrix.col(itr_file);
             m_predictionVector.push_back(v_prediction);
         }
     }
@@ -320,7 +332,7 @@ protected:
             while (!image_iterator.IsAtEnd())
             {
                 auto pixel = image_iterator.Get();
-                m_inputMatrix(counter_pix, counter_file) = pixel;
+                m_inputMatrix(counter_pix, counter_file) = (TScalarType)pixel/(TScalarType)255;
                 ++counter_pix;
                 ++image_iterator;
             }
@@ -368,7 +380,7 @@ protected:
                 auto pixel = image_iterator.Get();
                 for (int itr_df = 0; itr_df < TRANSFORM_DIMENSIONS; ++itr_df)
                 {
-                    m_outputMatrix(counter_pix, counter_file) = pixel[itr_df];
+                    m_outputMatrix(counter_pix, counter_file) = (TScalarType)pixel[itr_df];
                     ++counter_pix;
                 }
                 ++image_iterator;
@@ -377,6 +389,34 @@ protected:
         } // end for all files
 
         return;
+    }
+
+    void SaveInputMeanAsImage()
+    {
+        ImageType::Pointer reference = ReadImage<ImageType>(m_inputFiles.front());
+        ImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
+        ImageType::SpacingType spacing = reference->GetSpacing();
+        ImageType::DirectionType direction = reference->GetDirection();
+        ImageType::PointType origin = reference->GetOrigin();
+
+        typename ImageType::Pointer image = CreateImage<ImageType>(size);
+        image->SetSpacing(spacing);
+        image->SetOrigin(origin);
+        image->SetDirection(direction);
+        itk::ImageRegionIterator<ImageType> image_iterator(image, image->GetRequestedRegion());
+
+        unsigned long counter_v = 0;
+        while(!image_iterator.IsAtEnd())
+        {
+            typename ImageType::PixelType value = m_inputMean[counter_v];
+            image_iterator.Set(value);
+            ++image_iterator;
+            ++counter_v;
+        }
+
+        // Write input mean
+        std::string output_path = m_outputPrefix + "-inputMean.vtk";
+        WriteImage<ImageType>(image, output_path);
     }
 
     void SaveInputBasisAsImage()
@@ -391,26 +431,26 @@ protected:
         {
             VectorType v_image = m_inputBasis.col(itr_basis);
 
-            typename ImageType::Pointer basis_image = CreateImage<ImageType>(size);
-            basis_image->SetSpacing(spacing);
-            basis_image->SetOrigin(origin);
-            basis_image->SetDirection(direction);
-            itk::ImageRegionIterator<ImageType> basis_iterator(basis_image, basis_image->GetRequestedRegion());
+            typename ImageType::Pointer image = CreateImage<ImageType>(size);
+            image->SetSpacing(spacing);
+            image->SetOrigin(origin);
+            image->SetDirection(direction);
+            itk::ImageRegionIterator<ImageType> image_iterator(image, image->GetRequestedRegion());
 
             unsigned long counter_v = 0;
-            while(!basis_iterator.IsAtEnd())
+            while(!image_iterator.IsAtEnd())
             {
                 typename ImageType::PixelType value = v_image[counter_v];
-                basis_iterator.Set(value);
-                ++basis_iterator;
+                image_iterator.Set(value);
+                ++image_iterator;
                 ++counter_v;
             }
 
-            // Write predicted df and warped reference
+            // Write input basis to file
             char filename_df[20];
             int n = sprintf(filename_df, "inputBasis%03d.vtk", itr_basis);
             std::string output_path = m_outputPrefix + "-" + filename_df;
-            WriteImage<ImageType>(basis_image, output_path);
+            WriteImage<ImageType>(image, output_path);
         }
     }
 
@@ -426,14 +466,14 @@ protected:
         {
             VectorType v_image = m_outputBasis.col(itr_basis);
 
-            typename DisplacementImageType::Pointer output_df = CreateDisplacement<DisplacementImageType>(size);
-            output_df->SetSpacing(spacing);
-            output_df->SetOrigin(origin);
-            output_df->SetDirection(direction);
-            itk::ImageRegionIterator<DisplacementImageType> output_iterator(output_df, output_df->GetRequestedRegion());
+            typename DisplacementImageType::Pointer image_df = CreateDisplacement<DisplacementImageType>(size);
+            image_df->SetSpacing(spacing);
+            image_df->SetOrigin(origin);
+            image_df->SetDirection(direction);
+            itk::ImageRegionIterator<DisplacementImageType> image_iterator(image_df, image_df->GetRequestedRegion());
 
             unsigned long counter_v = 0;
-            while(!output_iterator.IsAtEnd())
+            while(!image_iterator.IsAtEnd())
             {
                 typename DisplacementImageType::PixelType df;
                 for (int itr_dim = 0; itr_dim < TRANSFORM_DIMENSIONS; ++itr_dim)
@@ -442,18 +482,60 @@ protected:
                     ++counter_v;
                 }
 
-                output_iterator.Set(df);
-                ++output_iterator;
+                image_iterator.Set(df);
+                ++image_iterator;
             }
 
-            // Write predicted df and warped reference
+            // Write output basis to file
             char filename_df[20];
             int n = sprintf(filename_df, "outputBasis%03d.vtk", itr_basis);
             std::string output_path = m_outputPrefix + "-" + filename_df;
-            WriteImage<DisplacementImageType>(output_df, output_path);
+            WriteImage<DisplacementImageType>(image_df, output_path);
         }
     }
 
+    void SaveOutputMeanAsImage()
+    {
+        DisplacementImageType::Pointer reference = ReadImage<DisplacementImageType>(m_outputFiles.front());
+        DisplacementImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
+        DisplacementImageType::SpacingType spacing = reference->GetSpacing();
+        DisplacementImageType::DirectionType direction = reference->GetDirection();
+        DisplacementImageType::PointType origin = reference->GetOrigin();
+
+        typename DisplacementImageType::Pointer image_df = CreateDisplacement<DisplacementImageType>(size);
+        image_df->SetSpacing(spacing);
+        image_df->SetOrigin(origin);
+        image_df->SetDirection(direction);
+        itk::ImageRegionIterator<DisplacementImageType> image_iterator(image_df, image_df->GetRequestedRegion());
+
+        unsigned long counter_v = 0;
+        while(!image_iterator.IsAtEnd())
+        {
+            typename DisplacementImageType::PixelType df;
+            for (int itr_dim = 0; itr_dim < TRANSFORM_DIMENSIONS; ++itr_dim)
+            {
+                df[itr_dim] = m_outputMean[counter_v];
+                ++counter_v;
+            }
+
+            image_iterator.Set(df);
+            ++image_iterator;
+        }
+
+        // Write output mean
+        std::string output_path = m_outputPrefix + "-outputMean.vtk";
+        WriteImage<DisplacementImageType>(image_df, output_path);
+    }
+
+    void SetFilePaths()
+    {
+        m_fnameInputBasis = "-inputBasis_" + std::to_string(m_numberOfPrincipalModesInput) + ".csv";
+        m_fnameOutputBasis = "-outputBasis_" + std::to_string(m_numberOfPrincipalModesOutput) + ".csv";
+        m_pathInputBasis = m_outputPrefix + m_fnameInputBasis;
+        m_pathInputMean = m_outputPrefix + "-inputMean.csv";
+        m_pathOutputBasis = m_outputPrefix + m_fnameOutputBasis;
+        m_pathOutputMean = m_outputPrefix + "-outputMean.csv";
+    }
 
 private:
     bool isTraining;
@@ -471,6 +553,7 @@ private:
 
     MatrixType m_inputMatrix;
     MatrixType m_outputMatrix;
+    MatrixType m_predictedOutputMatrix;
 
     VectorType m_inputMean;
     VectorType m_outputMean;
@@ -486,7 +569,17 @@ private:
 
     TrainingPairVectorType m_trainingPairs;
     TestVectorType m_testVector;
+
+    TestVectorType m_predictedFeatures;
     TestVectorType m_predictionVector;
+
+    // File handling
+    std::string m_fnameInputBasis;
+    std::string m_fnameOutputBasis;
+    std::string m_pathInputBasis;
+    std::string m_pathInputMean;
+    std::string m_pathOutputBasis;
+    std::string m_pathOutputMean;
 };
 
 #endif // DATAPARSER_H
