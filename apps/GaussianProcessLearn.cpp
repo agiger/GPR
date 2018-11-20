@@ -234,6 +234,7 @@ int main (int argc, char *argv[]){
     std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
     int n_outputModes;
     std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
+    bool is_training = true;
 
 
     //    std::string data_filename = argv[1];
@@ -257,7 +258,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
         //        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
-        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes));
+        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes, is_training));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 

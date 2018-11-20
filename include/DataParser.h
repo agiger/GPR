@@ -41,9 +41,9 @@ public:
     typedef Eigen::BDCSVD<MatrixType>                       BDCSVDType;
 
 
-    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes)
+    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool is_training)
     {
-        isTraining = true;
+        isTraining = is_training;
         m_inputPath = input_path;
         m_outputPath = output_path;
         m_outputPrefix = output_prefix;
@@ -51,18 +51,6 @@ public:
         m_outputFilecount = 0;
         m_numberOfPrincipalModesInput = input_modes;
         m_numberOfPrincipalModesOutput= output_modes;
-    }
-
-    DataParser(std::string input_path, std::string output_prefix, int input_modes, int output_modes)
-    {
-        isTraining = false;
-        m_inputPath = input_path;
-        m_outputPath = "";
-        m_outputPrefix = output_prefix;
-        m_inputFilecount = 0;
-        m_outputFilecount = 0;
-        m_numberOfPrincipalModesInput = input_modes;
-        m_numberOfPrincipalModesOutput = output_modes;
     }
 
     ~DataParser(){}
@@ -136,8 +124,8 @@ protected:
             m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
             m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
 
-            MatrixType fullInputBasis = inputSvd.matrixU() * inputSvd.singularValues().cwiseSqrt().asDiagonal();
-            MatrixType fullOutputBasis = outputSvd.matrixU() * outputSvd.singularValues().cwiseSqrt().asDiagonal();
+            MatrixType fullInputBasis = inputSvd.matrixU();
+            MatrixType fullOutputBasis = outputSvd.matrixU();
 
             m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
             m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
@@ -192,15 +180,23 @@ protected:
     {
         // Parse input files
         ParseInputFiles();
+        ParseOutputFiles();
 
         // Read input mean and basis
         m_inputBasis = ReadFromCsvFile(m_pathInputBasis);
         m_inputMean = ReadFromCsvFile(m_pathInputMean);
 
+        m_outputBasis = ReadFromCsvFile(m_pathOutputBasis);
+        m_outputMean = ReadFromCsvFile(m_pathOutputMean);
+
         // Feature extraction
         MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
         m_inputFeatures = alignedInput.transpose() * m_inputBasis;
         WriteToCsvFile(m_outputPrefix + "-inputFeatures_prediction.csv", m_inputFeatures);
+
+        MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
+        m_outputFeatures = alignedOutput.transpose() * m_outputBasis;
+        WriteToCsvFile(m_outputPrefix + "-groundtruthFeatures_prediction.csv", m_outputFeatures);
     }
 
     void inversePca()
@@ -221,7 +217,7 @@ protected:
         // inverse PCA
         MatrixType alignedOutput = m_outputBasis * outputFeatures;
         m_predictedOutputMatrix =  alignedOutput.colwise() + m_outputMean;
-        WriteToCsvFile(m_outputPrefix + "-outputFeatures_prediction.csv", outputFeatures);
+        WriteToCsvFile(m_outputPrefix + "-outputFeatures_prediction.csv", outputFeatures.transpose());
     }
 
     void WriteToCsvFile(std::string filename, MatrixType matrix)

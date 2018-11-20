@@ -194,13 +194,6 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
         int n = sprintf(filename_df, "dfPred%05d.vtk", counter_file);
         std::string output_path = output_dir + "/" + filename_df;
         WriteImage<DisplacementType>(output_df, output_path);
-
-        char filename_warped[20];
-        n = sprintf(filename_warped, "warpedImg%05d.vtk", counter_file);
-        output_path = output_dir + "/" + filename_warped;
-        MasterImageType::Pointer warped_image = WarpImage<MasterImageType, DisplacementType>(reference, output_df);
-        WriteImage<MasterImageType>(warped_image, output_path);
-
         ++counter_file;
     }
 }
@@ -208,9 +201,9 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process prediction app:" << std::endl;
 
-    if(argc!=7){
+    if(argc!=8){
         //        std::cout << "Usage: " << argv[0] << " gp_prefix input.csv output.csv" << std::endl;
-        std::cout << "Usage: " << argv[0] << " gp_prefix input output reference input_modes output_modes" << std::endl;
+        std::cout << "Usage: " << argv[0] << " gp_prefix input_folder output_folder ground_truth_folder reference input_modes output_modes" << std::endl;
         // TODO: remove input_modes + output_modes
         return -1;
     }
@@ -219,6 +212,7 @@ int main (int argc, char *argv[]){
     std::string gp_prefix = argv[++itr_argv];
     std::string input_dir= argv[++itr_argv];
     std::string output_dir = argv[++itr_argv];
+    std::string ground_truth_dir = argv[++itr_argv];
     std::string reference = argv[++itr_argv];
 
     // TODO: check if output_dir exists, if not -> create it
@@ -227,15 +221,7 @@ int main (int argc, char *argv[]){
     std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
     int n_outputModes;
     std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
-
-    //typename DisplacementType::SizeType size;
-    //for (unsigned int itr_size = 0; itr_size < IMAGE_DIMENSIONS; ++itr_size)
-    //{
-    //    std::string si = argv[++itr_argv];
-    //    size[itr_size] = std::stoi(si);
-    //}
-
-    // TODO: Define spacing for output images!!!
+    bool is_training = false;
 
     try{
         std::cout << "Initialize Gaussian process... " << std::flush;
@@ -248,14 +234,29 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
         //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, gp_prefix, n_inputModes, n_outputModes));
+        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
         TestVectorType predicted_features;
         for(const auto v : test_vectors){
+            std::cout << "v_in: " << std::flush;
+            for(int i=0; i<v.rows(); ++i)
+            {
+                std::cout << v(i) << " " << std::flush;
+            }
+            std::cout << std::endl;
+
             auto t0 = std::chrono::system_clock::now();
             predicted_features.push_back(gp->Predict(v));
+
+            std::cout << "v_pred: " << std::flush;
+            VectorType v_pred = predicted_features.back();
+            for(int i=0; i<v_pred.rows(); ++i)
+            {
+                std::cout << v_pred(i) << " " << std::flush;
+            }
+            std::cout << std::endl;
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }
