@@ -201,9 +201,9 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process prediction app:" << std::endl;
 
-    if(argc!=8){
+    if(argc!=8 && argc!=9){
         //        std::cout << "Usage: " << argv[0] << " gp_prefix input.csv output.csv" << std::endl;
-        std::cout << "Usage: " << argv[0] << " gp_prefix input_folder output_folder ground_truth_folder reference input_modes output_modes" << std::endl;
+        std::cout << "Usage: " << argv[0] << " gp_prefix input_folder output_folder ground_truth_folder reference input_modes output_modes [use_precomputed]" << std::endl;
         // TODO: remove input_modes + output_modes
         return -1;
     }
@@ -222,6 +222,11 @@ int main (int argc, char *argv[]){
     int n_outputModes;
     std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
     bool is_training = false;
+    bool use_precomputed = false;
+    if(argc==9)
+    {
+        use_precomputed = true;
+    }
 
     try{
         std::cout << "Initialize Gaussian process... " << std::flush;
@@ -234,7 +239,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
         //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training));
+        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training, use_precomputed));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
