@@ -9,6 +9,7 @@ Output * Comment
 #include <algorithm>
 #include <experimental/filesystem>
 #include <chrono>
+#include <math.h>
 //#include "boost/filesystem.hpp"
 
 #include <Eigen/SVD>
@@ -96,8 +97,8 @@ protected:
 
     void PcaFeatureExtractionForTraining()
     {
-//        bool usePrecomputed = ( std::experimental::filesystem::exists(m_pathInputBasis) &&
-//                                std::experimental::filesystem::exists(m_pathOutputBasis) );
+//        bool usePrecomputed = ( std::experimental::filesystem::exists(m_pathInputU) &&
+//                                std::experimental::filesystem::exists(m_pathOutputU) );
         if(!usePrecomputed)
         {
             ParseInputFiles();
@@ -110,8 +111,7 @@ protected:
             MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
             MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
 
-
-            // Computing SVD
+            // Compute SVD
             auto t0 = std::chrono::system_clock::now();
             BDCSVDType inputSvd(alignedInput, Eigen::ComputeThinU);
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
@@ -122,52 +122,70 @@ protected:
             elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "outputSvd done in " << elapsed_seconds.count() << "s" << std::endl;
 
-            // Compute Basis
-            m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
-            m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
+            // Compute Basis (sigma, U)
+            //m_numberOfPrincipalModesInput = std::min(m_numberOfPrincipalModesInput, static_cast<int>(inputSvd.matrixU().cols()));
+            //m_numberOfPrincipalModesOutput = std::min(m_numberOfPrincipalModesOutput, static_cast<int>(outputSvd.matrixU().cols()));
 
-            MatrixType fullInputBasis = inputSvd.matrixU()*inputSvd.singularValues().cwiseSqrt().asDiagonal();
-            MatrixType fullOutputBasis = outputSvd.matrixU()*outputSvd.singularValues().cwiseSqrt().asDiagonal();
+            VectorType fullInputSigma = inputSvd.singularValues()/std::sqrt((TScalarType)m_inputFilecount);
+            VectorType fullOutputSigma = outputSvd.singularValues()/std::sqrt((TScalarType)m_outputFilecount);
 
+            MatrixType fullInputBasis = inputSvd.matrixU()*fullInputSigma.asDiagonal().inverse();
+            MatrixType fullOutputBasis = outputSvd.matrixU()*fullOutputSigma.asDiagonal().inverse();
+
+            MatrixType fullInputFeatures = fullInputBasis.transpose() * alignedInput;
+            MatrixType fullOutputFeatures = fullOutputBasis.transpose() * alignedOutput;
+
+            std::cout << "inputSigma: " << fullInputSigma.rows() << "x" << fullInputSigma.cols() << std::endl;
+            std::cout << "inputU: " << inputSvd.matrixU().rows() << "x" << inputSvd.matrixU().cols() << std::endl;
+            std::cout << "inputFeatures: " << fullInputFeatures.rows() << "x" << fullInputFeatures.cols() << std::endl;
+            std::cout << "outputSigma: " << fullOutputSigma.rows() << "x" << fullOutputSigma.cols() << std::endl;
+            std::cout << "outputU: " << outputSvd.matrixU().rows() << "x" << outputSvd.matrixU().cols() << std::endl;
+            std::cout << "outputFeatures: " << fullOutputFeatures.rows() << "x" << fullOutputFeatures.cols() << std::endl;
+
+            // Compute Features (coefficients c)
             m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
             m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
 
-            // Compute Features
-            m_inputFeatures = alignedInput.transpose() * m_inputBasis;
-            m_outputFeatures = alignedOutput.transpose() * m_outputBasis;
+            m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
+
+            std::cout << "inputBasis: " << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
+            std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+            std::cout << "outputBasis: " << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
+            std::cout << "outputFeatures: " << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
 
             // Write files
             WriteToCsvFile(m_pathInputMean, m_inputMean);
-            WriteToCsvFile(m_pathInputBasis, fullInputBasis);
-            WriteToCsvFile(m_pathInputFeatures, m_inputFeatures);
+            WriteToCsvFile(m_pathInputU, inputSvd.matrixU());
+            WriteToCsvFile(m_pathInputSigma, fullInputSigma);
+            WriteToCsvFile(m_pathInputFeatures, fullInputFeatures);
             WriteToCsvFile(m_pathOutputMean, m_outputMean);
-            WriteToCsvFile(m_pathOutputBasis, fullOutputBasis);
-            WriteToCsvFile(m_pathOutputFeatures, m_outputFeatures);
+            WriteToCsvFile(m_pathOutputU, outputSvd.matrixU());
+            WriteToCsvFile(m_pathOutputSigma, fullOutputSigma);
+            WriteToCsvFile(m_pathOutputFeatures, fullOutputFeatures);
             SaveInputMeanAsImage();
             SaveOutputMeanAsImage();
             SaveInputBasisAsImage();
             SaveOutputBasisAsImage();
 
             // Compactness
-            VectorType inputSV = inputSvd.singularValues();
-            VectorType inputCumSum = VectorType::Zero(inputSV.rows());
-            inputCumSum(0) = inputSV(0);
-            for(int i=0; i < inputSV.rows()-1; ++i)
+            VectorType inputCumSum = VectorType::Zero(fullInputSigma.rows());
+            inputCumSum(0) = fullInputSigma(0,0);
+            for(int i=0; i < fullInputSigma.rows()-1; ++i)
             {
-                inputCumSum(i+1) = inputCumSum(i) + inputSV(i+1);
+                inputCumSum(i+1) = inputCumSum(i) + fullInputSigma(i+1,i+1);
             }
 
-            VectorType inputC = inputCumSum / inputCumSum(inputSV.rows()-1);
+            VectorType inputC = inputCumSum / inputCumSum(fullInputSigma.rows()-1);
 
-            VectorType outputSV = outputSvd.singularValues();
-            VectorType outputCumSum = VectorType::Zero(outputSV.rows());
-            outputCumSum(0) = outputSV(0);
-            for(int i=0; i < outputSV.rows()-1; ++i)
+            VectorType outputCumSum = VectorType::Zero(fullOutputSigma.rows());
+            outputCumSum(0) = fullOutputSigma(0,0);
+            for(int i=0; i < fullOutputSigma.rows()-1; ++i)
             {
-                outputCumSum(i+1) = outputCumSum(i) + outputSV(i+1);
+                outputCumSum(i+1) = outputCumSum(i) + fullOutputSigma(i+1,i+1);
             }
 
-            VectorType outputC = outputCumSum / outputCumSum(outputSV.rows()-1);
+            VectorType outputC = outputCumSum / outputCumSum(fullOutputSigma.rows()-1);
 
             WriteToCsvFile(m_outputPrefix + "-inputCompactness.csv", inputC);
             WriteToCsvFile(m_outputPrefix + "-outputCompactness.csv", outputC);
@@ -176,13 +194,15 @@ protected:
         else
         {
             // Read Features
-            MatrixType inputFeatures = ReadFromCsvFile(m_pathInputFeatures);
-            m_inputFeatures = inputFeatures.leftCols(m_numberOfPrincipalModesInput);
-            m_inputFilecount = m_inputFeatures.rows();
+            MatrixType fullInputFeatures = ReadFromCsvFile(m_pathInputFeatures);
+            m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            m_inputFilecount = m_inputFeatures.cols();
+            std::cout << "m_inputFilecount: " << m_inputFilecount << std::endl;
 
-            MatrixType outputFeatures = ReadFromCsvFile(m_pathOutputFeatures);
-            m_outputFeatures = outputFeatures.leftCols(m_numberOfPrincipalModesOutput);
-            m_outputFilecount = m_outputFeatures.rows();
+            MatrixType fullOutputFeatures = ReadFromCsvFile(m_pathOutputFeatures);
+            m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
+            m_outputFilecount = m_outputFeatures.cols();
+            std::cout << "m_outputFilecount: " << m_outputFilecount << std::endl;
         }
 
         // First approach
@@ -215,26 +235,34 @@ protected:
             ParseOutputFiles();
 
             // Read input mean and basis
-            m_inputBasis = ReadFromCsvFile(m_pathInputBasis);
+            MatrixType inputU = ReadFromCsvFile(m_pathInputU);
+            VectorType inputSigma = ReadFromCsvFile(m_pathInputSigma);
+            MatrixType fullInputBasis = inputU*inputSigma.asDiagonal().inverse();
+            m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
             m_inputMean = ReadFromCsvFile(m_pathInputMean);
 
-            m_outputBasis = ReadFromCsvFile(m_pathOutputBasis);
+            MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
+            VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
+            MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal().inverse();
+            m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
             m_outputMean = ReadFromCsvFile(m_pathOutputMean);
 
             // Feature extraction
             MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
-            m_inputFeatures = alignedInput.transpose() * m_inputBasis;
-            WriteToCsvFile(m_pathInputFeaturesForPrediction, m_inputFeatures);
+            MatrixType fullInputFeatures = fullInputBasis.transpose() * alignedInput;
+            m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            WriteToCsvFile(m_pathInputFeaturesForPrediction, fullInputFeatures);
 
             MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
-            m_outputFeatures = alignedOutput.transpose() * m_outputBasis;
-            WriteToCsvFile(m_pathGroundTruthFeatures, m_outputFeatures);
+            MatrixType fullOutputFeatures = fullOutputBasis.transpose() * alignedOutput;
+            m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
+            WriteToCsvFile(m_pathGroundTruthFeatures, fullOutputFeatures);
         }
         else
         {
-            m_inputFeatures = ReadFromCsvFile(m_pathInputFeaturesForPrediction);
-            m_inputFeatures = m_inputFeatures.leftCols(m_numberOfPrincipalModesInput);
-            m_inputFilecount = m_inputFeatures.rows();
+            MatrixType fullInputFeatures = ReadFromCsvFile(m_pathInputFeaturesForPrediction);
+            m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            m_inputFilecount = m_inputFeatures.cols();
         }
     }
 
@@ -248,20 +276,18 @@ protected:
             outputFeatures.col(itr) = v;
             itr++;
         }
+        WriteToCsvFile(m_pathOutputFeaturesForPrediction, outputFeatures);
 
         // Read output mean and basis
-        m_outputBasis = ReadFromCsvFile(m_pathOutputBasis);
+        MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
+        VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
+        MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal(); // not inverse here!
+        m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
         m_outputMean = ReadFromCsvFile(m_pathOutputMean);
-
-        if(!usePrecomputed)
-        {
-            m_outputBasis = m_outputBasis.leftCols(m_numberOfPrincipalModesOutput);
-        }
 
         // inverse PCA
         MatrixType alignedOutput = m_outputBasis * outputFeatures;
         m_predictedOutputMatrix =  alignedOutput.colwise() + m_outputMean;
-        WriteToCsvFile(m_pathOutputFeaturesForPrediction, outputFeatures.transpose());
     }
 
     void WriteToCsvFile(std::string filename, MatrixType matrix)
@@ -312,8 +338,8 @@ protected:
     {
         for(unsigned int itr_file; itr_file < m_inputFilecount; ++itr_file)
         {
-            VectorType v_input = m_inputFeatures.row(itr_file);
-            VectorType v_output = m_outputFeatures.row(itr_file);
+            VectorType v_input = m_inputFeatures.col(itr_file);
+            VectorType v_output = m_outputFeatures.col(itr_file);
             m_trainingPairs.push_back(std::make_pair(v_input, v_output));
         }
     }
@@ -322,7 +348,7 @@ protected:
     {
         for(unsigned int itr_file; itr_file < m_inputFilecount; ++itr_file)
         {
-            VectorType v_input = m_inputFeatures.row(itr_file);
+            VectorType v_input = m_inputFeatures.col(itr_file);
             m_testVector.push_back(v_input);
         }
     }
@@ -572,13 +598,17 @@ protected:
         // General/Training
         //m_fnameInputBasis = "-inputBasis_" + std::to_string(m_numberOfPrincipalModesInput) + ".csv";
         //m_fnameOutputBasis = "-outputBasis_" + std::to_string(m_numberOfPrincipalModesOutput) + ".csv";
-        m_fnameInputBasis = "-inputBasis.csv";
-        m_fnameOutputBasis = "-outputBasis.csv";
-        m_pathInputBasis = m_outputPrefix + m_fnameInputBasis;
+//        m_fnameInputBasis = "-inputBasis.csv";
+//        m_fnameOutputBasis = "-outputBasis.csv";
+
         m_pathInputMean = m_outputPrefix + "-inputMean.csv";
+        m_pathInputU = m_outputPrefix + "-inputU.csv";;
+        m_pathInputSigma = m_outputPrefix + "-inputSigma.csv";
         m_pathInputFeatures = m_outputPrefix + "-inputFeatures.csv";
-        m_pathOutputBasis = m_outputPrefix + m_fnameOutputBasis;
+
         m_pathOutputMean = m_outputPrefix + "-outputMean.csv";
+        m_pathOutputU = m_outputPrefix + "-outputU.csv";;
+        m_pathOutputSigma = m_outputPrefix + "-outputSigma.csv";
         m_pathOutputFeatures = m_outputPrefix + "-outputFeatures.csv";
 
         // Prediction
@@ -615,6 +645,9 @@ private:
     MatrixType m_inputBasis;
     MatrixType m_outputBasis;
 
+    VectorType m_inputSigma;
+    VectorType m_outputSigma;
+
     MatrixType m_inputFeatures;
     MatrixType m_outputFeatures;
 
@@ -627,13 +660,17 @@ private:
     // File handling
     std::string m_fnameInputBasis;
     std::string m_fnameOutputBasis;
-    std::string m_pathInputBasis;
+
     std::string m_pathInputMean;
+    std::string m_pathInputU;
+    std::string m_pathInputSigma;
     std::string m_pathInputFeatures;
-    std::string m_pathOutputBasis;
-    std::string m_pathOutputMean;
-    std::string m_pathOutputFeatures;
     std::string m_pathInputFeaturesForPrediction;
+
+    std::string m_pathOutputMean;
+    std::string m_pathOutputU;
+    std::string m_pathOutputSigma;
+    std::string m_pathOutputFeatures;
     std::string m_pathOutputFeaturesForPrediction;
     std::string m_pathGroundTruthFeatures;
 };
