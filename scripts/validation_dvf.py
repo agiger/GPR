@@ -54,6 +54,7 @@ if __name__ == "__main__":
     # 2. Compute statistics
     # eliminate zero rows
     err_red = err[~(err == 0).all(1)]
+    x = range(0, err_red.shape[1])
     max_err = np.amax(err_red, axis=0)
     min_err = np.amin(err_red, axis=0)
     mean_err = np.mean(err_red, axis=0)
@@ -62,11 +63,18 @@ if __name__ == "__main__":
     per = [50, 75, 90, 95]
     percentiles = np.percentile(err_red.flatten(), per)
 
+    errbar= [10, 25, 75, 90]
+    errbars= np.percentile(err_red, errbar, axis=0)
+
     plt.figure()
-    plt.plot(max_err, label='max error')
-    plt.plot(min_err, label='min error')
-    plt.plot(mean_err, label='mean error')
-    plt.plot(median_err, label='median error')
+    plt.plot(max_err, label='max error', color='r')
+    plt.plot(min_err, label='min error', color='g')
+    # plt.plot(mean_err, label='mean error')
+    plt.plot(median_err, label='median error', color='b')
+    plt.fill_between(x, errbars[0, :], errbars[-1, :], edgecolor=(0.8, 0.9, 1), facecolor=(0.8, 0.9, 1),
+                     label='10/90 percentiles')
+    plt.fill_between(x, errbars[1, :], errbars[-2, :], edgecolor=(0.6, 0.8, 1), facecolor=(0.6, 0.8, 1),
+                     label='25/75 percentiles')
     plt.grid()
     plt.title('Error statistics')
     plt.legend()
