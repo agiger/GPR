@@ -201,7 +201,7 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process prediction app:" << std::endl;
 
-    if(argc!=8 && argc!=9){
+    if(argc!=8 && argc!=9 && argc!=10){
         //        std::cout << "Usage: " << argv[0] << " gp_prefix input.csv output.csv" << std::endl;
         std::cout << "Usage: " << argv[0] << " gp_prefix input_folder output_folder ground_truth_folder reference input_modes output_modes [use_precomputed]" << std::endl;
         // TODO: remove input_modes + output_modes
@@ -228,6 +228,13 @@ int main (int argc, char *argv[]){
         use_precomputed = true;
     }
 
+    bool use_test_data = false;
+    if(argc==10)
+    {
+        use_precomputed = false;
+        use_test_data = true;
+    }
+
     try{
         std::cout << "Initialize Gaussian process... " << std::flush;
         typedef gpr::WhiteKernel<double>            WhiteKernelType;
@@ -239,29 +246,14 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
         //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training, use_precomputed));
+        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training, use_precomputed, use_test_data));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
         TestVectorType predicted_features;
         for(const auto v : test_vectors){
-            std::cout << "v_in: " << std::flush;
-            for(int i=0; i<v.rows(); ++i)
-            {
-                std::cout << v(i) << " " << std::flush;
-            }
-            std::cout << std::endl;
-
             auto t0 = std::chrono::system_clock::now();
             predicted_features.push_back(gp->Predict(v));
-
-            std::cout << "v_pred: " << std::flush;
-            VectorType v_pred = predicted_features.back();
-            for(int i=0; i<v_pred.rows(); ++i)
-            {
-                std::cout << v_pred(i) << " " << std::flush;
-            }
-            std::cout << std::endl;
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }

@@ -46,6 +46,21 @@ public:
     {
         isTraining = is_training;
         usePrecomputed = use_precomputed;
+        useTestData = false;
+        m_inputPath = input_path;
+        m_outputPath = output_path;
+        m_outputPrefix = output_prefix;
+        m_inputFilecount = 0;
+        m_outputFilecount = 0;
+        m_numberOfPrincipalModesInput = input_modes;
+        m_numberOfPrincipalModesOutput= output_modes;
+    }
+
+    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool is_training, bool use_precomputed, bool use_test_data)
+    {
+        isTraining = is_training;
+        usePrecomputed = use_precomputed;
+        useTestData = use_test_data;
         m_inputPath = input_path;
         m_outputPath = output_path;
         m_outputPrefix = output_prefix;
@@ -232,7 +247,6 @@ protected:
         {
             // Parse input files
             ParseInputFiles();
-            ParseOutputFiles();
 
             // Read input mean and basis
             MatrixType inputU = ReadFromCsvFile(m_pathInputU);
@@ -241,22 +255,28 @@ protected:
             m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
             m_inputMean = ReadFromCsvFile(m_pathInputMean);
 
-            MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
-            VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
-            MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal().inverse();
-            m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
-            m_outputMean = ReadFromCsvFile(m_pathOutputMean);
-
             // Feature extraction
             MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
             MatrixType fullInputFeatures = fullInputBasis.transpose() * alignedInput;
             m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
             WriteToCsvFile(m_pathInputFeaturesForPrediction, fullInputFeatures);
 
-            MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
-            MatrixType fullOutputFeatures = fullOutputBasis.transpose() * alignedOutput;
-            m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
-            WriteToCsvFile(m_pathGroundTruthFeatures, fullOutputFeatures);
+            if(!useTestData)
+            {
+                // Parse ground truth files
+                ParseOutputFiles();
+
+                MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
+                VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
+                MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal().inverse();
+                m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
+                m_outputMean = ReadFromCsvFile(m_pathOutputMean);
+
+                MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
+                MatrixType fullOutputFeatures = fullOutputBasis.transpose() * alignedOutput;
+                m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
+                WriteToCsvFile(m_pathGroundTruthFeatures, fullOutputFeatures);
+            }
         }
         else
         {
@@ -620,6 +640,7 @@ protected:
 private:
     bool isTraining;
     bool usePrecomputed;
+    bool useTestData;
     std::string m_inputPath;
     std::string m_outputPath;
     std::string m_outputPrefix;
