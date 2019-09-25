@@ -1,8 +1,8 @@
 # Options
 options:
-   preprocessing: False
+   preprocessing: True
    registration_2d: True
-   stacking: False
+   stacking: True
    registration_3d: False
    splitting_data: False
    regression: False
@@ -17,16 +17,30 @@ exe:
    regression_predict: '/home/alina/Projects/GPR/build/apps/gpPredict'
 
 # General configuration
+#general:
+#   surrogate_type: 0 #  0 - MR navigators, 1 - ultrasound
+#   root_dir: '/media/WDportable/PSI_Setuptest_20190517/02_phantom_Stacking_x133/zc_4dmri_ufssfp2_PG_Nav_F1/with_US'
+#   data_dir: '4'
+#   navi_dir: '5'
+#   us_dir: 'us'
+#   n_slices: 40
+#   n_sweeps: 3
+#   n_training_sweeps: 0
+#   master_navi: 'navi00003.dcm'
+#   master_volume: 'vol0000.vtk'
+#   input_format: 'png'
+#   output_format: 'vtk'
+
 general:
    surrogate_type: 0 #  0 - MR navigators, 1 - ultrasound
-   root_dir: '/media/WDblue2/4DMRI/US4DMRI_Geneva_20180831/MR/case2_sorted/zc_4dmri_ufssfp2_MK_Nav_F2' #'/media/WDblue2/4DMRI/testCpp/zc_4dmri_ufssfp2_MK_Nav_F1'
-   data_dir: 'data_018_020'
-   navi_dir: 'navis_019_021'
+   root_dir: '/media/WDportable/PSI_Setuptest_20190517/02_phantom_Stacking_x133/zc_4dmri_ufssfp2_PG_Nav_F1/without_US'
+   data_dir: '8'
+   navi_dir: '9'
    us_dir: 'us'
-   n_slices: 32
-   n_sweeps: 24
-   n_training_sweeps: 20
-   master_navi: 'navi00005.dcm'
+   n_slices: 40
+   n_sweeps: 2
+   n_training_sweeps: 0
+   master_navi: 'navi00003.dcm'
    master_volume: 'vol0000.vtk'
    input_format: 'png'
    output_format: 'vtk'

@@ -114,6 +114,7 @@ protected:
     {
 //        bool usePrecomputed = ( std::experimental::filesystem::exists(m_pathInputU) &&
 //                                std::experimental::filesystem::exists(m_pathOutputU) );
+//        ParseOutputFiles();
         if(!usePrecomputed)
         {
             ParseInputFiles();
@@ -360,6 +361,8 @@ protected:
         {
             VectorType v_input = m_inputFeatures.col(itr_file);
             VectorType v_output = m_outputFeatures.col(itr_file);
+//            VectorType v_output = m_outputMatrix.col(itr_file);
+            std::cout << v_input.size() << " " << v_output.size() << std::endl;
             m_trainingPairs.push_back(std::make_pair(v_input, v_output));
         }
     }
@@ -378,6 +381,7 @@ protected:
         for(unsigned int itr_file; itr_file < m_predictedOutputMatrix.cols() ; ++itr_file)
         {
             VectorType v_prediction = m_predictedOutputMatrix.col(itr_file);
+//            VectorType v_prediction = m_predictedFeatures[itr_file];
             m_predictionVector.push_back(v_prediction);
         }
     }

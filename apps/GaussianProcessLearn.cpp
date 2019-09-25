@@ -268,14 +268,25 @@ int main (int argc, char *argv[]){
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 
         std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
+        auto t0 = std::chrono::system_clock::now();
         for(const auto &tp : train_pairs){
             gp->AddSample(tp.first, tp.second);
         }
+        std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
+
 
         std::cout << "[done]" << std::endl << "Perform learning... " << std::flush;
+        t0 = std::chrono::system_clock::now();
         gp->Initialize();
+        elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
+
         std::cout << "[done]" << std::endl << "Saving Gaussian process... " << std::flush;
+        t0 = std::chrono::system_clock::now();
         gp->Save(output_prefix);
+        elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
         std::cout << "[done]" << std::endl;
     }
     catch(std::string& s){

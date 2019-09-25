@@ -252,12 +252,15 @@ int main (int argc, char *argv[]){
 
         TestVectorType predicted_features;
         for(const auto v : test_vectors){
+            std::cout << "v_in: " << v.rows() << "x" << v.cols() << std::flush;
             auto t0 = std::chrono::system_clock::now();
             predicted_features.push_back(gp->Predict(v));
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }
 
+//        std::cout << predicted_features.size() << std::endl;
+//        SavePrediction(predicted_features, output_dir, reference);
         // Perform PCA-1
         TestVectorType output_vectors = parser->GetResults(predicted_features);
         SavePrediction(output_vectors, output_dir, reference);

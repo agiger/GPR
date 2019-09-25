@@ -4,6 +4,8 @@ import os
 import numpy as np
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-root', help='root directory', type=str, required=True)
@@ -66,7 +68,7 @@ if __name__ == "__main__":
     errbar= [10, 25, 75, 90]
     errbars= np.percentile(err_red, errbar, axis=0)
 
-    plt.figure()
+    fig1 = plt.figure(figsize=(7.5, 5))
     plt.plot(max_err, label='max error', color='r')
     plt.plot(min_err, label='min error', color='g')
     # plt.plot(mean_err, label='mean error')
@@ -76,8 +78,10 @@ if __name__ == "__main__":
     plt.fill_between(x, errbars[1, :], errbars[-2, :], edgecolor=(0.6, 0.8, 1), facecolor=(0.6, 0.8, 1),
                      label='25/75 percentiles')
     plt.grid()
-    plt.title('Error statistics')
+    # plt.title('Error statistics')
     plt.legend()
+    plt.xlabel('sample')
+    plt.ylabel('error (mm)')
 
     # fig2, axs2 = plt.subplots(nrows=5, ncols=10)
     # axs2 = axs2.ravel()
@@ -86,11 +90,16 @@ if __name__ == "__main__":
     #     axs2[i].grid()
 
     color_idx = np.linspace(0, 1, len(per))
-    plt.figure()
+    fig2 = plt.figure(figsize=(7.5, 5))
     plt.hist(err_red.flatten(), 50)
     for c, p, pp in zip(color_idx, percentiles, per):
         plt.axvline(p, color=plt.cm.cool(c), lw=2, label='{}th percentile'.format(str(pp)))
     plt.grid()
     plt.legend()
+    # plt.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.2e'))
+    plt.xlabel('error (mm)')
+    plt.ylabel('count')
 
+    # fig1.savefig(os.path.join('/home/alina/Desktop', 'P114_MK_time.pdf'), bbox_inches='tight')
+    # fig2.savefig(os.path.join('/home/alina/Desktop', 'P114_MK_hist.pdf'), bbox_inches='tight')
     plt.show()
