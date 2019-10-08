@@ -1,25 +1,26 @@
 import os
 import argparse
 
-import pydicom
+import math
+import numpy as np
 import SimpleITK as sitk
 
-import numpy as np
-import math
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# import data
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-src', help='input directory', type=str, required=True)
-parser.add_argument('-dest', help='output directory', type=str, required=True)
-parser.add_argument('-format', help='file format', type=str, default='mha')
+parser.add_argument('--dir', help='data folder', required=True)
+parser.add_argument('--fmt', help='data format', default='mha')
 args = parser.parse_args()
 
-if __name__ == "__main__":
-    # Define folder structure and read files
-    if not os.path.exists(args.src):
-        raise Exception('No such file or directory: ' + args.src)
 
-    os.makedirs(args.dest, exist_ok=True)
-    files = sorted([os.path.join(args.src, f) for f in os.listdir(args.src) if f.endswith(args.format)])
+def preprocess_files(src, dest, fmt='mha'):
+    # Define folder structure and read files
+    if not os.path.exists(src):
+        raise Exception('No such file or directory: ' + src)
+
+    os.makedirs(dest, exist_ok=True)
+    files = sorted([os.path.join(src, f) for f in os.listdir(src) if f.endswith(fmt)])
 
     # Define ROI
     indices = {
@@ -77,5 +78,26 @@ if __name__ == "__main__":
                   indices["y_min"]:indices["y_max"],
                   indices["z_min"]:indices["z_max"]
                   ]
-        sitk.WriteImage(sub_img, os.path.join(args.dest, os.path.basename(file)))
+        sitk.WriteImage(sub_img, os.path.join(dest, os.path.basename(file)))
 
+
+if __name__ == "__main__":
+    assert os.path.exists(args.dir), 'directory does not exist'
+
+    files = sorted([os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith(args.fmt)])
+
+    us_dir = os.path.join(args.dir, 'pairs', 'US')
+    if not os.path.exists(us_dir):
+        os.makedirs(us_dir)
+
+    ct_dir = os.path.join(args.dir, 'pairs', 'CT')
+    if not os.path.exists(ct_dir):
+        os.makedirs(ct_dir)
+
+    if len(files) > 0:
+        preprocess_files(args.dir, ct_dir, args.fmt)
+
+    for itr, file in enumerate(files):
+        os.remove(file)
+
+    print('Files copied: {:d}'.format(len(files)))

@@ -5,50 +5,59 @@ import csv
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib2tikz
+from mpl_toolkits.mplot3d import Axes3D
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-root', help='root directory of parameter files', type=str, required=True)
-parser.add_argument('-input_par', help='input parameter file (csv)', type=str)
-parser.add_argument('-output_par', help='output parameter file (csv)', type=str)
-parser.add_argument('-pred_input_par', help='predicted input parameter file (csv)', type=str)
-parser.add_argument('-pred_output_par', help='predicted output parameter file (csv)', type=str)
-parser.add_argument('-gt_output_par', help='ground truth output parameter file (csv)', type=str)
-parser.add_argument('-input_compactness', help='input compactness file (csv)', type=str)
-parser.add_argument('-output_compactness', help='output compactness file (csv)', type=str)
+parser.add_argument('-prefix', help='prefix for parameter files', type=str, default='gpr')
+parser.add_argument('-input_par', help='input parameter file (csv)', type=str, default='inputFeatures.csv')
+parser.add_argument('-output_par', help='output parameter file (csv)', type=str, default='outputFeatures.csv')
+parser.add_argument('-pred_input_par', help='predicted input parameter file (csv)', type=str, default='inputFeatures_prediction.csv')
+parser.add_argument('-pred_output_par', help='predicted output parameter file (csv)', type=str, default='outputFeatures_prediction.csv')
+parser.add_argument('-gt_output_par', help='ground truth output parameter file (csv)', type=str, default='groundtruthFeatures_prediction.csv')
+parser.add_argument('-input_compactness', help='input compactness file (csv)', type=str, default='inputCompactness.csv')
+parser.add_argument('-output_compactness', help='output compactness file (csv)', type=str, default='outputCompactness.csv')
 parser.add_argument('-dest', help='output folder for saving plots', type=str)
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    plot_nInputC = 2
-    plot_nOutputC = 2
-    plot_fig = [1, 1, 0, 0, 0, 1, 1]
+    plot_nInputC = 4
+    plot_nOutputC = 4
+    plot_fig = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
 
     # input parameters
-    input_pars = np.loadtxt(os.path.join(args.root, args.input_par), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.input_par)
+    input_pars = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('input_pars', input_pars.shape)
 
     # output parameters
-    output_pars = np.loadtxt(os.path.join(args.root, args.output_par), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.output_par)
+    output_pars = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('output_pars', output_pars.shape)
 
     # input parameters for prediction
-    pred_input_pars = np.loadtxt(os.path.join(args.root, args.pred_input_par), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.pred_input_par)
+    pred_input_pars = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('pred_input_pars', pred_input_pars.shape)
 
     # predicted output parameters
-    pred_output_pars = np.loadtxt(os.path.join(args.root, args.pred_output_par), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.pred_output_par)
+    pred_output_pars = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('pred_output_pars', pred_output_pars.shape)
 
     # ground truth output parameters
-    gt_output_pars = np.loadtxt(os.path.join(args.root, args.gt_output_par), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.gt_output_par)
+    gt_output_pars = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('gt_output_pars', gt_output_pars.shape)
 
     # input compactness
-    input_compactness = np.loadtxt(os.path.join(args.root, args.input_compactness), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.input_compactness)
+    input_compactness = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('input_compactness', input_compactness.shape)
 
     # output compactness
-    output_compactness = np.loadtxt(os.path.join(args.root, args.output_compactness), delimiter=',')
+    fname = '{:s}-{:s}'.format(args.prefix, args.output_compactness)
+    output_compactness = np.loadtxt(os.path.join(args.root, fname), delimiter=',')
     print('output_compactness', output_compactness.shape)
 
     # Plot
@@ -154,12 +163,12 @@ if __name__ == "__main__":
             plt.title("Predicted and ground truth output parameters")
         fig4.savefig(os.path.join(args.dest, 'output_par_for_prediction.pdf'), bbox_inches='tight')
 
-    # Fig 5: Compactness
+    # Fig 5: Compactness or "Explained Variance Ratio"
     itr += 1
     if plot_fig[itr]:
         fig5 = plt.figure()
-        plt.plot(xTrain, input_compactness, label='Input')
-        plt.plot(xTrain, output_compactness, label='Output')
+        plt.plot(xTrain-offset, input_compactness, label='Input')
+        plt.plot(xTrain-offset, output_compactness, label='Output')
         plt.axhline(0, color='black', lw=linew)
         plt.grid()
         plt.legend()
@@ -176,7 +185,7 @@ if __name__ == "__main__":
         plt.legend()
         fig6.savefig(os.path.join(args.dest, 'input_output_c0.pdf'), bbox_inches='tight')
 
-    # Fig 7: Input parameters for training
+    # Fig 7: PC_0 vs PC_1
     itr += 1
     if plot_fig[itr]:
         fig7 = plt.figure()
@@ -185,8 +194,43 @@ if __name__ == "__main__":
         plt.ylabel('PC_1')
         #plt.axhline(0, color='black', lw=linew)
         plt.grid()
-        plt.title("Prinicipal components")
+        plt.title("Input Prinicipal components")
         fig7.savefig(os.path.join(args.dest, 'input_pcs.pdf'), bbox_inches='tight')
         matplotlib2tikz.save(os.path.join(args.dest, "input_pcs.tex"))
 
+    # Fig 8: PC_0 vs PC_1 vs PC_2
+    itr += 1
+    if plot_fig[itr]:
+        fig8 = plt.figure()
+        ax = fig8.add_subplot(111, projection='3d')
+        ax.scatter(input_pars[0, :], input_pars[1, :], input_pars[2, :])
+        ax.set_xlabel('PC_0')
+        ax.set_ylabel('PC_1')
+        ax.set_zlabel('PC_2')
+        ax.set_title("Input Prinicipal components")
+
+
+    # Fig 9: PC_0 vs PC_1
+    itr += 1
+    if plot_fig[itr]:
+        fig9 = plt.figure()
+        plt.scatter(output_pars[0, :], output_pars[1, :])
+        plt.xlabel('PC_0')
+        plt.ylabel('PC_1')
+        #plt.axhline(0, color='black', lw=linew)
+        plt.grid()
+        plt.title("Output Prinicipal components")
+        fig9.savefig(os.path.join(args.dest, 'output_pcs.pdf'), bbox_inches='tight')
+        matplotlib2tikz.save(os.path.join(args.dest, "output_pcs.tex"))
+
+    # Fig 8: PC_0 vs PC_1 vs PC_2
+    itr += 1
+    if plot_fig[itr]:
+        fig10 = plt.figure()
+        ax = fig10.add_subplot(111, projection='3d')
+        ax.scatter(output_pars[0, :], output_pars[1, :], output_pars[2, :])
+        ax.set_xlabel('PC_0')
+        ax.set_ylabel('PC_1')
+        ax.set_zlabel('PC_2')
+        ax.set_title("Output Prinicipal components")
     plt.show()

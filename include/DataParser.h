@@ -362,7 +362,7 @@ protected:
             VectorType v_input = m_inputFeatures.col(itr_file);
             VectorType v_output = m_outputFeatures.col(itr_file);
 //            VectorType v_output = m_outputMatrix.col(itr_file);
-            std::cout << v_input.size() << " " << v_output.size() << std::endl;
+//            std::cout << v_input.size() << " " << v_output.size() << std::endl;
             m_trainingPairs.push_back(std::make_pair(v_input, v_output));
         }
     }
@@ -411,7 +411,7 @@ protected:
         for(std::string & file : m_inputFiles)
         {
             // Read data
-            std::cout << file << std::endl;
+//            std::cout << file << std::endl;
             typename TInputType::Pointer image = ReadImage<TInputType>(file);
 
             // Fill Eigen vector with data
@@ -457,7 +457,7 @@ protected:
         for(std::string & file : m_outputFiles)
         {
             // Read data
-            std::cout << file << std::endl;
+//            std::cout << file << std::endl;
             typename TOutputType::Pointer image = ReadImage<TOutputType>(file);
 
             // Fill Eigen vector with data
@@ -517,7 +517,7 @@ protected:
         ImageType::DirectionType direction = reference->GetDirection();
         ImageType::PointType origin = reference->GetOrigin();
 
-        for(unsigned int itr_basis = 0; itr_basis < m_outputBasis.cols(); itr_basis++)
+        for(unsigned int itr_basis = 0; itr_basis < m_inputBasis.cols(); itr_basis++)
         {
             VectorType v_image = m_inputBasis.col(itr_basis);
 
