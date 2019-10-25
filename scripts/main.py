@@ -310,7 +310,10 @@ if __name__ == "__main__":
         gp_predict_par_list.append(cfg_gpr.n_inputModes)
         gp_predict_par_list.append(cfg_gpr.n_outputModes)
         if subdir == 'test':
+            gp_predict_par_list.append('false')  # use_precomputed
             gp_predict_par_list.append('test')
+        elif cfg_gpr.use_precomputed_features:
+            gp_predict_par_list.append('true')  # use_precomputed_features
 
         gp_predict_pars = ' '.join(gp_predict_par_list)
         gp_predict_cmd = ' '.join([exe.regression_predict, gp_predict_pars])
