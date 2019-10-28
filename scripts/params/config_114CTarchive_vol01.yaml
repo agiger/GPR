@@ -42,10 +42,10 @@ reg3d:
    - ''
 
 # Gaussian Processes Regression (GPR)
-# If you run GPR for test set, the features are overwritten and have to be recomputed for the training set afterwards.
+# If you run GPR for test set, the features are overwritten and have to be recomputed for the validation set afterwards.
 # In that case, set 'use_precomputed_features' to 1
 gpr:
-   subdir: 'validation'
+   subdir: 'test'
    kernel_string: '"GaussianKernel(35, 30,)"'
    data_noise: '1.0'
    n_inputModes: '186'
