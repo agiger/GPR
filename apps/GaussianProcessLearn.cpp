@@ -209,8 +209,8 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process training app:" << std::endl;
 
-    if(argc!=8 && argc!=9){
-        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp n_inputModes n_outputModes [use_precomputed]" << std::endl;
+    if(argc!=10 && argc!=11){
+        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp n_inputModes n_outputModes startTrainImg n_TrainImgs [use_precomputed]" << std::endl;
 
         //        std::cout << "Usage: " << argv[0] << " data.csv kernel_string data_noise output_gp" << std::endl;
 
@@ -234,9 +234,12 @@ int main (int argc, char *argv[]){
     std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
     int n_outputModes;
     std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
-    bool is_training = true;
+    int ind_startTrainImg;
+    std::stringstream ss_startTrain; ss_startTrain << argv[++itr_argv]; ss_startTrain >> ind_startTrainImg;
+    int n_trainImages;
+    std::stringstream ss_nTrain; ss_nTrain << argv[++itr_argv]; ss_nTrain >> n_trainImages;
     bool use_precomputed = false;
-    if(argc==9)
+    if(argc==11)
     {
         use_precomputed = true;
     }
@@ -263,7 +266,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
         //        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
-        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes, is_training, use_precomputed));
+        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes, ind_startTrainImg, n_trainImages, use_precomputed));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 

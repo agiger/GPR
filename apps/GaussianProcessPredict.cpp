@@ -198,6 +198,17 @@ void SavePrediction(const TestVectorType& vectors, const std::string& output_dir
     }
 }
 
+void WriteConfidenceToFile(std::string filename, std::vector<double> confidence)
+{
+    std::ofstream file;
+    file.open(filename.c_str(), std::ios::out | std::ios::app);
+    for(const auto c: confidence)
+    {
+        file << c << ',';
+    }
+    file.close();
+}
+
 int main (int argc, char *argv[]){
     std::cout << "Gaussian process prediction app:" << std::endl;
 
@@ -221,7 +232,6 @@ int main (int argc, char *argv[]){
     std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
     int n_outputModes;
     std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
-    bool is_training = false;
     bool use_precomputed = false;
     if(argc==9)
     {
@@ -246,15 +256,17 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
         //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, is_training, use_precomputed, use_test_data));
+        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, use_precomputed, use_test_data));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
         TestVectorType predicted_features;
+        std::vector<double> confidence;
         for(const auto v : test_vectors){
             std::cout << "v_in: " << v.rows() << "x" << v.cols() << std::flush;
             auto t0 = std::chrono::system_clock::now();
             predicted_features.push_back(gp->Predict(v));
+            confidence.push_back(gp->GetCredibleInterval(v));
             std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }
@@ -264,6 +276,7 @@ int main (int argc, char *argv[]){
         // Perform PCA-1
         TestVectorType output_vectors = parser->GetResults(predicted_features);
         SavePrediction(output_vectors, output_dir, reference);
+        WriteConfidenceToFile(gp_prefix + "-credibleInterval.csv", confidence);
     }
     catch(std::string &s){
         std::cout << "Error: " << s << std::endl;

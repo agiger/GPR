@@ -42,9 +42,9 @@ public:
     typedef Eigen::BDCSVD<MatrixType>                       BDCSVDType;
 
 
-    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool is_training, bool use_precomputed)
+    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, int ind_start_train, int n_train_images, bool use_precomputed)
     {
-        isTraining = is_training;
+        isTraining = true;
         usePrecomputed = use_precomputed;
         useTestData = false;
         m_inputPath = input_path;
@@ -54,11 +54,17 @@ public:
         m_outputFilecount = 0;
         m_numberOfPrincipalModesInput = input_modes;
         m_numberOfPrincipalModesOutput= output_modes;
+        m_nTrainingImages = n_train_images;
+        m_indStartTrain = ind_start_train;
+        m_indEndTrain = m_indStartTrain + m_nTrainingImages -1;
+        std::cout << "indStart: " << m_indStartTrain << std::endl;
+        std::cout << "indEnd: " << m_indEndTrain << std::endl;
+        std::cout << "nImgs: " << m_nTrainingImages << std::endl;
     }
 
-    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool is_training, bool use_precomputed, bool use_test_data)
+    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool use_precomputed, bool use_test_data)
     {
-        isTraining = is_training;
+        isTraining = false;
         usePrecomputed = use_precomputed;
         useTestData = use_test_data;
         m_inputPath = input_path;
@@ -68,6 +74,12 @@ public:
         m_outputFilecount = 0;
         m_numberOfPrincipalModesInput = input_modes;
         m_numberOfPrincipalModesOutput= output_modes;
+        m_nTrainingImages = 0;
+        m_indStartTrain = 0;
+        m_indEndTrain = m_indStartTrain + m_nTrainingImages -1;
+        std::cout << "indStart: " << m_indStartTrain << std::endl;
+        std::cout << "indEnd: " << m_indEndTrain << std::endl;
+        std::cout << "nImgs: " << m_nTrainingImages << std::endl;
     }
 
     ~DataParser(){}
@@ -394,6 +406,16 @@ protected:
         }
         sort(m_inputFiles.begin(), m_inputFiles.end());
         m_inputFilecount = m_inputFiles.size();
+        std::cout << "inputFilecount: " << m_inputFilecount << std::endl;
+
+        if(m_nTrainingImages != 0)
+        {
+            m_inputFiles.erase(m_inputFiles.begin()+m_indEndTrain+1, m_inputFiles.end());
+            m_inputFiles.erase(m_inputFiles.begin(), m_inputFiles.begin()+m_indStartTrain);
+        }
+
+        m_inputFilecount = m_inputFiles.size();
+        std::cout << "inputFilecount: " << m_inputFilecount << std::endl;
 
         // Identify vector size
         typename TInputType::Pointer image = ReadImage<TInputType>(m_inputFiles.front());
@@ -440,6 +462,16 @@ protected:
         }
         sort(m_outputFiles.begin(), m_outputFiles.end());
         m_outputFilecount = m_outputFiles.size();
+        std::cout << "outputFilecount: " << m_outputFilecount << std::endl;
+
+        if(m_nTrainingImages != 0)
+        {
+            m_outputFiles.erase(m_outputFiles.begin()+m_indEndTrain+1, m_outputFiles.end());
+            m_outputFiles.erase(m_outputFiles.begin(), m_outputFiles.begin()+m_indStartTrain);
+        }
+
+        m_outputFilecount = m_outputFiles.size();
+        std::cout << "outputFilecount: " << m_outputFilecount << std::endl;
 
         // Identify vector size
         typename TOutputType::Pointer image = ReadImage<TOutputType>(m_outputFiles.front());
@@ -653,6 +685,9 @@ private:
     int m_outputFilecount;
     int m_inputVectorSize;
     int m_outputVectorSize;
+    int m_nTrainingImages;
+    int m_indStartTrain;
+    int m_indEndTrain;
 
     std::vector<std::string> m_inputFiles;
     std::vector<std::string> m_outputFiles;
