@@ -94,7 +94,7 @@ if __name__ == "__main__":
         print('[done]')
 
     # Parse navi if required
-    if cfg_general.surrogate_type == 0:
+    if cfg_general.surrogate_type == 0 or cfg_general.surrogate_type == 2:
         opt_navi = Namespace(**cfg['general'])
         opt_navi.is_navi = True
         opt_navi.input_dir = os.path.join(opt_navi.root_dir, opt_navi.navi_dir)
@@ -145,6 +145,11 @@ if __name__ == "__main__":
         surrogate_dir = os.path.join(cfg_general.root_dir, cfg_general.us_dir)
         stacking_method = 'ultrasound'
         series_format = '%05d.png'
+    elif cfg_general.surrogate_type == 2:
+        stack_dir = os.path.join(cfg_general.root_dir, 'stacks_navi')
+        surrogate_dir = os.path.join(registration2d_dir, 'dfs')
+        stacking_method = 'pusterla'
+        series_format = 'dfReg%05d.vtk'
     else:
         try:
             surrogate_dir = os.path.join(cfg_general.root_dir, cfg_general.input_dir)
@@ -184,7 +189,7 @@ if __name__ == "__main__":
     # 3D Registration
     # ----------------------------------------------------------
     # TODO: change order of assignment (if output_dir defined, use this path always)
-    if cfg_general.surrogate_type == 0:
+    if cfg_general.surrogate_type == 0 or cfg_general.surrogate_type == 2:
         registration3d_dir = os.path.join(cfg_general.root_dir, 'reg_3d_navi')
     elif cfg_general.surrogate_type == 1:
         registration3d_dir = os.path.join(cfg_general.root_dir, 'reg_3d_us')

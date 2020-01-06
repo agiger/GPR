@@ -1,0 +1,95 @@
+# Options
+options:
+   preprocessing: False
+   registration_2d: False
+   stacking: True
+   registration_3d: False
+   splitting_data: False
+   regression: False
+   evaluation: False
+
+# Executables
+exe:
+   stacking: '/home/alina/Projects/ImageStacking4dMRI/build/ims4dMRI'
+   registration_2d: '/home/alina/Projects/GraphDemons_3D/build_2d/gdr'
+   registration_3d: '/home/alina/Projects/GraphDemons_3D/build_3d/gdr'
+   regression_learn: '/home/alina/Projects/GPR/build/apps/gpLearn'
+   regression_predict: '/home/alina/Projects/GPR/build/apps/gpPredict'
+
+# General configuration
+general:
+   surrogate_type: 2 #  0 - vonSiebenthal, 1 - ultrasound, 2 - pusterla
+   root_dir: '/media/WDblue2/Orso_02/'
+   data_dir: 'For_alina_v2/dicom/064_op_4dmri_ufssfp_T_T_BH_50_50'
+   navi_dir: 'For_alina_v2/dicom/065_op_4dmri_ufssfp_T_T_BH_50_50'
+   us_dir: 'us'
+   n_slices: 28
+   n_sweeps: 30
+   n_training_sweeps: -1
+   master_navi: 'navi00008.dcm'
+   master_volume: 'vol0000.vtk'
+   input_format: 'png'
+   output_format: 'vtk'
+
+# 2D Registration (for navis only)
+reg2d:
+  - '-rescale'
+  - '-wVerbose'
+  - '-optIter=150'
+  - '-numScales 4'
+  - '-regName=graph'
+  - '-regKernelSizeMax=4,6,10'
+  - '-regKernelSizeMin=4,5,8'
+  - '-regDecayType=linear'
+  - '-regDecayRate=-0.02'
+  - '-optInitStep=0.8'
+  - '-optName=AGD'
+  - '-optGrad'
+  - '-metric=lccA'
+  - '-metricKernelSizeMax=2,4,8'
+  - '-metricKernelSizeMin=2,4,8'
+  - '-edgeName=id'
+  - '-edgeScaleIntens=15'
+  - '-edgeScaleDisplace=1'
+  - '-edgeDecayDomain=0.00003'
+  - '-edgeDetectNodeColapse'
+  - '-edgeNodeColapseMinVal=1'
+  - '-edgeNodeColapseNewEdgeVal=1'
+  - '-regStartEdgeUpdate=10'
+  - '-regGraphMeanEdge'
+  - '-writeDICOM'
+  - '-writeFlagFile'
+  - '-cudaDeviceId 0'
+
+# 3D Registration
+reg3d:
+   - '-rescale'
+   - '-wVerbose'
+   - '-optIter=150'
+   - '-numScales 4'
+   - '-regName=graph'
+   - '-regKernelSizeMax=6,8,12'
+   - '-regKernelSizeMin=2,3,5'
+   - '-regDecayType=linear'
+   - '-regDecayRate=-0.02'
+   - '-optInitStep=0.8'
+   - '-optName=AGD'
+   - '-optGrad'
+   - '-metric=lccA'
+   - '-metricKernelSizeMax=4,6,10'
+   - '-metricKernelSizeMin=2,4,8'
+   - '-edgeName=id'
+   - '-edgeScaleIntens=15'
+   - '-edgeScaleDisplace=1'
+   - '-edgeDecayDomain=0.003'
+   - '-edgeDetectNodeColapse'
+   - '-edgeNodeColapseMinVal=1'
+   - '-edgeNodeColapseNewEdgeVal=1'
+   - '-regStartEdgeUpdate=10'
+   - '-regGraphMeanEdge'
+   - '-cudaDeviceId 0'
+
+# Gaussian Processes Regression (GPR)
+gpr:
+   kernel_string: '"GaussianKernel(2.3, 1.0,)"'
+   data_noise: 1.0
