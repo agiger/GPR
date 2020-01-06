@@ -78,6 +78,7 @@ def preprocess_files(src, dest, fmt='mha'):
                   indices["z_min"]:indices["z_max"]
                   ]
         sitk.WriteImage(sub_img, os.path.join(dest, os.path.basename(file)))
+    np.save(os.path.join(src, 'indices_VOI'), indices)
 
 
 if __name__ == "__main__":

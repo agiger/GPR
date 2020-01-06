@@ -21,9 +21,10 @@ parser.add_argument('-dest', help='output folder for saving plots', type=str)
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    plot_nInputC = 4
-    plot_nOutputC = 4
-    plot_fig = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
+    plot_nInputC = 2
+    plot_nOutputC = 2
+    n_plot_samples = 880
+    plot_fig = [1, 1, 0, 0, 0, 0, 0, 0, 0, 1]
 
     # input parameters
     fname = '{:s}-{:s}'.format(args.prefix, args.input_par)
@@ -69,7 +70,6 @@ if __name__ == "__main__":
     xTrain = np.arange(offset, nTrainFiles+offset)
     xTest = np.arange(0, nTestFiles)
 
-    n_plot_samples = 100
     # Fig 1: Input parameters for training
     if plot_fig[itr]:
         if plot_nInputC > 1:

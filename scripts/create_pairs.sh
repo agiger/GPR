@@ -86,7 +86,6 @@ mode[9]=2
 # ----------------------------------------------------------------------------------------------------------------------
 # Preparation
 # 1. Extract <data_folder.zip> with 4DCT(MRI) data from PSI
-# 2. Create subfolder <data_folder>/pairs/CT and copy 4DCT(MRI) data into this folder
 for data in "${dataArray[@]}"; do
   python data/create_CT_datasets.py --dir "$root/$data"
 done

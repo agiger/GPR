@@ -80,6 +80,8 @@ def preprocess_files(src, dest, fmt='mha'):
                   ]
         sitk.WriteImage(sub_img, os.path.join(dest, os.path.basename(file)))
 
+    np.save(os.path.join(src, 'indices_VOI'), indices)
+
 
 if __name__ == "__main__":
     assert os.path.exists(args.dir), 'directory does not exist'
