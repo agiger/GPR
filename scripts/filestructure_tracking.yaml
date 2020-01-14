@@ -1,0 +1,140 @@
+# Create input (US)/output (4DCT(MRI)) pairs. Two possible scenarios:
+# Mode 1: Slice Stacking
+# Mode 2: MoCo
+
+options:
+   autoregression: True
+   prepare_CT: True
+   prepare_US: True
+   create_pairs: False
+
+# Source folders
+src: '/media/WDportable/MotionModelling_PMB'
+dest: '/media/WDportable/MotionModelling_Tracking'
+gpr: '/home/alina/Projects/GPR/scripts/'
+moco: '/home/alina/Projects/MRReconstruction/'
+get_pairs_moco: 'scripts/ReconstructionUS/preprocessing/data_loader.py'
+#get_pairs_stacking: "'/home/alina/Projects/4dmri/4dmri/ultrasound/helperFunctions/extractCorrespondingUSImagesTracking.m'"
+matlab: '/home/alina/Projects/4dmri/4dmri/ultrasound/helperFunctions/'
+get_pairs_stacking: 'extractCorrespondingUSImagesTracking'
+
+# Parameters for matlab script
+matlab_params:
+  n: 2  # n-step ahead predictions using autoregression (set to 0 if no autoregression)
+  p: 5  # order of autoregressive model (set to 1 if no autoregression)
+  us_framerate: 15
+  crop_us_roi: 1  #
+  adjust_us_intensity: 1
+
+datasets:
+  114CTarchive_data15_16:  # in number of image pairs
+    nTrainAR: 75
+    nTestAR: 5
+    nTrain: 490
+    nVal: 50
+    nTest: 146
+    offset: 0
+    mode: 1
+    split_factor: 1
+    ct_filename: 'deformationfield_{:03d}.mha'
+    us_filename: 'us_{:02d}_{:05d}.png'
+  114CTarchive_EK-194-18:  # in number of image pairs
+    nTrainAR: 75
+    nTestAR: 5
+    nTrain: 426
+    nVal: 50
+    nTest: 146
+    offset: 0
+    mode: 1
+    split_factor: 1
+    ct_filename: 'deformationfield_{:03d}.mha'
+    us_filename: 'us_{:02d}_{:05d}.png'
+  114CTarchive_vol01:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 52
+    nVal: 5
+    nTest: 27
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+  114CTarchive_vol04:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 54
+    nVal: 5
+    nTest: 27
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+  114CTarchive_vol05:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 51
+    nVal: 5
+    nTest: 27
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+  ZL0001_data15_16:  # in number of image pairs
+    nTrainAR: 75
+    nTestAR: 5
+    nTrain: 603
+    nVal: 50
+    nTest: 33
+    offset: 0
+    mode: 1
+    split_factor: 1
+    ct_filename: 'deformationfield_{:03d}.mha'
+    us_filename: 'us_{:02d}_{:05d}.png'
+  ZL0001_EK-194-18:  # in number of image pairs
+    nTrainAR: 75
+    nTestAR: 5
+    nTrain: 539
+    nVal: 50
+    nTest: 33
+    offset: 0
+    mode: 1
+    split_factor: 1
+    ct_filename: 'deformationfield_ref001_{:03d}.mha'
+    us_filename: 'us_{:02d}_{:05d}.png'
+  ZL0001_vol01:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 73
+    nVal: 5
+    nTest: 6
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+  ZL0001_vol04:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 75
+    nVal: 5
+    nTest: 6
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+  ZL0001_vol05:  # in number of US videos
+    nTrainAR: 8
+    nTestAR: 2
+    nTrain: 72
+    nVal: 5
+    nTest: 6
+    offset: 0
+    mode: 2
+    split_factor: 11  # number of image pairs per US videos
+    ct_filename: 'deformationfield_{:04d}.mha'
+    us_filename: 'us_{:06d}.png'
+

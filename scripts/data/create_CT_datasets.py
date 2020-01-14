@@ -5,16 +5,8 @@ import math
 import numpy as np
 import SimpleITK as sitk
 
-# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-# import data
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--dir', help='data folder', required=True)
-parser.add_argument('--fmt', help='data format', default='mha')
-args = parser.parse_args()
-
-
-def preprocess_files(src, dest, fmt='mha'):
+def preprocess_files(src, dest, fmt='mha', tresh=100):
     # Define folder structure and read files
     if not os.path.exists(src):
         raise Exception('No such file or directory: ' + src)
@@ -31,7 +23,8 @@ def preprocess_files(src, dest, fmt='mha'):
         "z_min": math.inf,
         "z_max": -math.inf
     }
-    for itr, file in enumerate(files):
+    n = min(len(files), tresh)
+    for itr, file in enumerate(files[:n]):
         print(file)
         img = sitk.ReadImage(file)
         arr = sitk.GetArrayFromImage(img)
@@ -83,23 +76,28 @@ def preprocess_files(src, dest, fmt='mha'):
     np.save(os.path.join(src, 'indices_VOI'), indices)
 
 
-if __name__ == "__main__":
-    assert os.path.exists(args.dir), 'directory does not exist'
+def create_datasets(src, dest, fmt='mha', tresh=100):
+    assert os.path.exists(src), 'directory does not exist'
+    files = sorted([os.path.join(src, f) for f in os.listdir(src) if f.endswith(fmt)])
 
-    files = sorted([os.path.join(args.dir, f) for f in os.listdir(args.dir) if f.endswith(args.fmt)])
-
-    us_dir = os.path.join(args.dir, 'pairs', 'US')
-    if not os.path.exists(us_dir):
-        os.makedirs(us_dir)
-
-    ct_dir = os.path.join(args.dir, 'pairs', 'CT')
-    if not os.path.exists(ct_dir):
-        os.makedirs(ct_dir)
+    if not os.path.exists(dest):
+        os.makedirs(dest)
 
     if len(files) > 0:
-        preprocess_files(args.dir, ct_dir, args.fmt)
+        preprocess_files(src, dest, fmt, tresh)
 
     for itr, file in enumerate(files):
         os.remove(file)
 
     print('Files copied: {:d}'.format(len(files)))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dir', help='data folder', required=True)
+    parser.add_argument('--fmt', help='data format', type=str, default='mha')
+    parser.add_argument('--tresh', help='max number of images to be analyised for VOI', type=int, default=100)
+    args = parser.parse_args()
+
+    dest = os.path.join(args.src, 'pairs', 'CT')
+    create_datasets(args.dir, dest, args.fmt, args.tresh)
