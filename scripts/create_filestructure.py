@@ -30,11 +30,11 @@ if __name__ == "__main__":
     # Create US filestructure
     if opt['prepare_US']:
         src = os.path.join(cfg['src'], 'US_data')
-        us_root = os.path.join(cfg['dest'], 'US_data')
+        dest = os.path.join(cfg['dest'], 'US_data')
 
         # Run Matlab script (for stacking data)
         matlab_cmd = cfg['get_pairs_stacking'] + "('{:s}','{:s}',{:d},{:d},{:d},{:d},{:d})".format(
-            src, us_root,
+            src, dest,
             matlab_params['crop_us_roi'], matlab_params['adjust_us_intensity'],
             matlab_params['n'], matlab_params['p'], matlab_params['us_framerate']
         )
@@ -47,16 +47,20 @@ if __name__ == "__main__":
         for data in datasets:
             if datasets[data]['mode'] == 1:  # Slice stacking
                 us_dest = os.path.join(cfg['dest'], data, 'pairs', 'US')
+                ar_dest = os.path.join(cfg['dest'], data, 'pairs', 'AR')
                 if 'data15_16' in data:
-                    us_src = os.path.join(us_root, 'dataG15_16')
-                    us_pairs_lst = [os.path.join(us_root, f) for f in os.listdir(us_root)
+                    us_src = os.path.join(dest, 'dataG15_16')
+                    us_pairs_lst = [os.path.join(dest, f) for f in os.listdir(dest)
                                     if f.startswith('pairs_dataG15_16') and f.endswith('csv')]
                 elif 'EK-194-18' in data:
-                    us_src = os.path.join(us_root, 'dataG06_07')
-                    us_pairs_lst = [os.path.join(us_root, f) for f in os.listdir(us_root)
+                    us_src = os.path.join(dest, 'dataG06_07')
+                    us_pairs_lst = [os.path.join(dest, f) for f in os.listdir(dest)
                                     if f.startswith('pairs_dataG06_07') and f.endswith('csv')]
                 else:
                     raise Exception('US data for dataset {:s} not properly defined'.format(data))
+
+                if os.path.exists(ar_dest):
+                    sh.rmtree(ar_dest)
 
                 if os.path.exists(us_dest):
                     sh.rmtree(us_dest)

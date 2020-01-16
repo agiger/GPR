@@ -7,3 +7,9 @@ For all datasets:
 
 Stacking:
 2. For each dataset, run ~/Projects/4dmri/4dmri/ultrasound/helperFunctions/establishTempCorrespondence.m
+
+Create Filestructure
+python3 create_filestructure.py --config <filestructure_config.yaml>
+
+Compute model
+python3 main.py --config <params/config_dataset.yaml>

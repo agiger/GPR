@@ -1,0 +1,8 @@
+//
+// Created by alina on 15.01.20.
+//
+
+#ifndef PROJECT_AUTOREGRESSION_H
+#define PROJECT_AUTOREGRESSION_H
+
+#endif //PROJECT_AUTOREGRESSION_H

@@ -29,6 +29,8 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
                  ct_filename='deformationfield_{:03d}.mha', us_filename='us_{:05d}.png'):
 
     assert len(split) == 3 or len(split) == 5, '{:s}: split indices not correctly defined'.format(root)
+    split = [s*split_factor for s in split]
+    offset *= split_factor
 
     # Directories and subdirectories
     pairs_dir = os.path.join(root, 'pairs')
@@ -68,7 +70,7 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
     empty_dir(us_test_dir)
     empty_dir(us_offset_dir)
 
-    if ar:
+    if ar and mode == 1:
         ar_train_dir = os.path.join(ar_dir, 'train')
         ar_test_dir = os.path.join(ar_dir, 'test')
         ar_dirs = [ar_train_dir, ar_test_dir]
@@ -95,8 +97,9 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
             assert pairs_ind.shape[0] % (sum(split) + sum(split_ar) + offset) == 0, 'split indices do not fit dataset'
             p = int(pairs_ind.shape[0]/(sum(split) + sum(split_ar) + offset))  # Order of AR model if any
         elif mode == 2:
-            assert pairs_ind.shape[0] % (sum(split) + offset)*split_factor == 0, 'split indices do not fit dataset'
-            p = int(pairs_ind.shape[0]/((sum(split) + offset))*split_factor)  # Order of AR model if any
+            assert pairs_ind.shape[0] % (sum(split) + offset) == 0, 'split indices do not fit dataset'
+            p = int(pairs_ind.shape[0]/(sum(split) + offset))  # Order of AR model if any
+    print(split_ar, split)
 
     start_ind = offset
     print(start_ind)
@@ -116,10 +119,8 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
             if itr_set < 2:  # No CT data for test set
                 ct_ind = int(pairs_ind[start_ind + itr_file, 0])
                 ct_file = os.path.join(ct_dir, ct_filename.format(ct_ind))
-                try:
+                if itr_file % p == 0:
                     shutil.move(ct_file, ct_dirs[itr_set])
-                except shutil.Error:
-                    pass
 
             file_ind = start_ind + itr_file
             fname = get_us_filename(pairs_ind, file_ind, mode, us_filename)
