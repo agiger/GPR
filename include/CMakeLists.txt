@@ -13,6 +13,7 @@ INSTALL(FILES
         GaussianProcessInference.h
         itkUtils.h
         DataParser.h
+        AutoRegression.h
 DESTINATION
         include
 PERMISSIONS
