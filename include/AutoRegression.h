@@ -35,25 +35,18 @@ public:
 
     void ReadModelParametersFromFile(std::string filename)
     {
-       m_theta = gpr::ReadMatrix<VectorType>(filename);
+       m_theta = gpr::ReadMatrix<MatrixType>(filename);
     };
 
     void WriteModelParametersToFile(std::string filename)
     {
-//        MatrixType tmp(m_theta.rows(), m_theta.cols()*2);
-//        tmp << m_theta, m_theta;
-
-        // Writing does not work properly
-//        gpr::WriteMatrix<VectorType>(m_theta, filename);
+        gpr::WriteMatrix<MatrixType>(m_theta, filename);
     };
 
 
 
-    void ComputeModel(VectorType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL)
+    void ComputeModel(MatrixType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
     {
-//        if(verbose) {std::cout << "X:\n" << X << std::endl;}
-//        if(verbose) {std::cout << "Y:\n" << Y << std::endl;}
-//        if(verbose) {std::cout << "D:\n" << D << std::endl;}
         // Initialise data
         int nSamples = 0;
         int nBatches = 0;
@@ -74,48 +67,45 @@ public:
             }
         }
 
-        // Declare y, D, and theta
+        // Compute AR model for each feature independently
+        int nFeatures = X.cols();
         int K = X.rows() - nBatches;
-        VectorType Y = VectorType::Zero(K);
-        MatrixType D = MatrixType::Zero(K, m_p);
-        std::cout << "X:\n" << X << std::endl;
+        MatrixType theta = MatrixType::Zero(m_p, nFeatures);
 
-        // Fill matrices
-        int startInd = 0;
-        int batchCount = 0;
-        for(int b=0; b<nBatchTypes; ++b)
-        {
-            for(int rep=0; rep<batchRepetition[b]; ++rep)
+        for(int f=0; f<nFeatures; ++f){
+            // Declare y, D, and theta
+            VectorType Y = VectorType::Zero(K);
+            MatrixType D = MatrixType::Zero(K, m_p);
+            if(verbose) {std::cout << "X:\n" << X << std::endl;}
+
+            // Fill matrices
+            int startInd = 0;
+            int batchCount = 0;
+            for(int b=0; b<nBatchTypes; ++b)
             {
-                VectorType Xb = X.block(startInd,0,batchSize[b],1);
-                std::cout << "Xb:\n" << Xb << std::endl;
+                for(int rep=0; rep<batchRepetition[b]; ++rep)
+                {
+                    VectorType Xb = X.block(startInd,f,batchSize[b],1);
+                    if(verbose) {std::cout << "Xb:\n" << Xb << std::endl;}
 
-                int Kb = Xb.rows() -1;
-                Y.block(startInd-batchCount,0,Kb,1) = Xb.bottomRows(Kb);
-                D.block(startInd-batchCount,0,Kb,m_p) = ComputeSubmatrix(Xb);
-                std::cout << "D:\n" << D.block(startInd-batchCount,0,Kb,m_p) << std::endl;
-                std::cout << "D:\n" << D << std::endl;
+                    int Kb = Xb.rows() -1;
+                    Y.block(startInd-batchCount,0,Kb,1) = Xb.bottomRows(Kb);
+                    D.block(startInd-batchCount,0,Kb,m_p) = ComputeSubmatrix(Xb);
+                    if(verbose) {std::cout << "D:\n" << D.block(startInd-batchCount,0,Kb,m_p) << std::endl;}
+                    if(verbose) {std::cout << "D:\n" << D << std::endl;}
 
-                startInd += batchSize[b];
-                batchCount++;
+                    startInd += batchSize[b];
+                    batchCount++;
+                }
             }
+
+            theta.col(f) = D.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(Y);
         }
 
-        m_theta = D.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(Y);
-
-//        int K = X.rows() - 1;
-//        m_theta = VectorType::Zero(m_p);
-
-//        MatrixType D = MatrixType::Zero(K, m_p);
-//        VectorType Y = X.bottomRows(K);
-//        for(int k=0; k<m_p; ++k)
-//        {
-//            D.bottomRows(K-k).col(k) = X.topRows(K-k);
-//            m_theta = D.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(Y);
-//        }
+        m_theta = theta;
     }
 
-    VectorType Predict(VectorType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL)
+    MatrixType Predict(MatrixType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
     {
         // Initialise data
         int nSamples = 0;
@@ -137,57 +127,46 @@ public:
             }
         }
 
-        // Declare D
+        // Predict each feature separately
+        int nFeatures = X.cols();
         int K = X.rows() - nBatches;
-        MatrixType D = MatrixType::Zero(K, m_p);
+        MatrixType YPred = MatrixType::Zero(K, nFeatures);
 
-        // Fill matrices (maybe as function with call by reference? --> Same logic for training and testing)
-        int startInd = 0;
-        int batchCount = 0;
-        for(int b=0; b<nBatchTypes; ++b)
-        {
-            for(int rep=0; rep<batchRepetition[b]; ++rep)
+        for(int f=0; f<nFeatures; ++f){
+            // Declare D
+            MatrixType D = MatrixType::Zero(K, m_p);
+
+            // Fill matrices (maybe as function with call by reference? --> Same logic for training and testing)
+            int startInd = 0;
+            int batchCount = 0;
+            for(int b=0; b<nBatchTypes; ++b)
             {
-                VectorType Xb = X.block(startInd,0,batchSize[b],1);
-                int Kb = Xb.rows() - 1;
-                D.block(startInd-batchCount,0,Kb,m_p) = ComputeSubmatrix(Xb);
+                for(int rep=0; rep<batchRepetition[b]; ++rep)
+                {
+                    VectorType Xb = X.block(startInd,f,batchSize[b],1);
+                    int Kb = Xb.rows() - 1;
+                    D.block(startInd-batchCount,0,Kb,m_p) = ComputeSubmatrix(Xb);
 
-                startInd += batchSize[b];
-                batchCount++;
+                    startInd += batchSize[b];
+                    batchCount++;
+                }
             }
+
+            // Predict n steps ahead
+            MatrixType DStep = D;
+            if(verbose) {std::cout << "DStep:\n" << DStep << std::endl;}
+            VectorType YStep = VectorType::Zero(K);
+            for(int n=0; n<m_n; ++n)
+            {
+                YStep = DStep*m_theta.col(f);
+                MatrixType DTmp = DStep.leftCols(m_p-1);
+                DStep << YStep, DTmp;
+                if(verbose) {std::cout << "DStep:\n" << DStep << std::endl;}
+            }
+            YPred.col(f) = YStep;
         }
 
-        // Predict n steps ahead
-        MatrixType DStep = D;
-        std::cout << "DStep:\n" << DStep << std::endl;
-        VectorType YStep = VectorType::Zero(K);
-        for(int n=0; n<m_n; ++n)
-        {
-            YStep = DStep*m_theta;
-            MatrixType DTmp = DStep.leftCols(m_p-1);
-            DStep << YStep, DTmp;
-            std::cout << "DStep:\n" << DStep << std::endl;
-        }
-
-
-//        int K = X.rows() - 1;
-
-//        MatrixType D = MatrixType::Zero(K, m_p);
-//        for(int k=0; k<m_p; ++k) {
-//            D.bottomRows(K - k).col(k) = X.topRows(K - k);
-//        }
-
-//        // Predict n steps ahead:
-//        MatrixType DStep = D;
-//        VectorType YStep = VectorType::Zero(K);
-//        for(int n=0; n<m_n; ++n)
-//        {
-//            YStep = DStep*m_theta;
-//            MatrixType DTmp = DStep.leftCols(m_p-1);
-//            DStep << YStep, DTmp;
-//        }
-
-        return YStep;
+        return YPred;
     }
 
     bool AutoRegressionTest()
@@ -195,26 +174,30 @@ public:
         int nBatchTypes = 2;
         int batchSize[nBatchTypes] = {2, 4};
         int batchRepetition[nBatchTypes] = {1, 1};
-        VectorType X(6);
-        X << 1, 2, 3, 4, 5, 6;
-        VectorType X_test(6);
-        X_test << 7, 8, 9, 10, 11, 12;
+        MatrixType X(6,2);
+        X << 1, 2, 3, 4, 5, 6,
+             10, 20, 30, 40, 50, 60;
+        MatrixType X_test(6,2);
+        X_test << 7, 8, 9, 10, 11, 12,
+                  70, 80, 90, 100, 110, 120;
 
         std::cout << "Compute model 1" << std::endl;
-        ComputeModel(X, nBatchTypes, batchSize, batchRepetition);
+        ComputeModel(X, nBatchTypes, batchSize, batchRepetition, true);
         std::cout << "Predict model 1" << std::endl;
-        VectorType YPred1 = Predict(X_test, true);
+        MatrixType YPred1 = Predict(X_test, nBatchTypes, batchSize, batchRepetition, true);
         std::cout << "theta:\n" << m_theta << std::endl;
         std::cout << "YPred:\n" << YPred1 << std::endl;
 
         std::cout << "Compute model 2" << std::endl;
         ComputeModel(X);
         std::cout << "Predict model 2" << std::endl;
-        VectorType YPred2 = Predict(X_test, true);
+        MatrixType YPred2 = Predict(X_test, true);
         std::cout << "theta:\n" << m_theta << std::endl;
         std::cout << "YPred:\n" << YPred2 << std::endl;
 
-//        WriteModelParametersToFile("/tmp/test_theta.txt");
+        WriteModelParametersToFile("/tmp/test_theta.txt");
+        ReadModelParametersFromFile("/tmp/test_theta.txt");
+        std::cout << "theta:\n" << m_theta << std::endl;
 
         return true;
     }
@@ -235,6 +218,6 @@ protected:
 private:
     int m_n;          // n-step ahead prediction
     int m_p;          // order of AR model
-    VectorType m_theta;
+    MatrixType m_theta;
 };
 #endif //AUTOREGRESSION_H
