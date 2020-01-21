@@ -40,7 +40,8 @@ public:
 
         // Compute basis
         m_sigma = svd.singularValues()/std::sqrt((TScalarType)X.cols());
-        m_basis = svd.matrixU()*m_sigma.asDiagonal().inverse();
+        m_U = svd.matrixU();
+        m_basis = m_U*m_sigma.asDiagonal().inverse();
     }
 
     PCA(std::string path){
@@ -51,8 +52,20 @@ public:
 
         m_mean = gpr::ReadMatrix<MatrixType>(fnameMean);
         m_sigma = gpr::ReadMatrix<MatrixType>(fnameSigma);
-        MatrixType U = gpr::ReadMatrix<MatrixType>(fnameU);
-        m_basis = U*m_sigma.asDiagonal().inverse();
+        m_U = gpr::ReadMatrix<MatrixType>(fnameU);
+        m_basis = m_U*m_sigma.asDiagonal().inverse();
+    }
+
+    VectorType GetMean(){
+        return m_mean;
+    }
+
+    VectorType GetEigenvalues(){
+        return m_sigma;
+    }
+
+    MatrixType GetMatrixU(){
+        return m_U;
     }
 
     MatrixType GetBasis(int nFeatures=0){
@@ -76,7 +89,8 @@ public:
     }
 
     MatrixType GetReconstruction(MatrixType& weights){
-        MatrixType _X = m_basis*weights;
+        MatrixType basis = m_U*m_sigma.asDiagonal();
+        MatrixType _X = basis.leftCols(weights.rows())*weights;
         MatrixType X = _X.colwise() + m_mean;
         return X;
     }
@@ -90,9 +104,20 @@ public:
         return cumSum/cumSum.tail(1)(0);
     }
 
+    void WriteMatricesToFile(std::string path){
+        std::string fnameMean = path + "Mean.bin";
+        std::string fnameSigma = path + "Sigma.bin";
+        std::string fnameU = path + "U.bin";
+
+        gpr::WriteMatrix<MatrixType>(m_mean, fnameMean);
+        gpr::WriteMatrix<MatrixType>(m_sigma, fnameSigma);
+        gpr::WriteMatrix<MatrixType>(m_U, fnameU);
+    }
+
 private:
     VectorType m_mean;
     VectorType m_sigma;
+    MatrixType m_U;
     MatrixType m_basis;
 };
 

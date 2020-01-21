@@ -15,6 +15,8 @@ Output * Comment
 #include <Eigen/SVD>
 #include <Eigen/Dense>
 #include "GaussianProcess.h"
+#include "MatrixIO.h"
+#include "PCA.h"
 
 #include "itkUtils.h"
 
@@ -40,7 +42,7 @@ public:
 
     typedef Eigen::JacobiSVD<MatrixType>                    JacobiSVDType;
     typedef Eigen::BDCSVD<MatrixType>                       BDCSVDType;
-
+    typedef PCA<TScalarType>                                     PcaType;
 
     DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, int ind_start_train, int n_train_images, bool use_precomputed)
     {
@@ -94,7 +96,7 @@ public:
         return m_outputFilecount;
     }
 
-    TrainingPairVectorType& GetTrainingData()
+    TrainingPairVectorType GetTrainingData()
     {
         SetFilePaths();
         PcaFeatureExtractionForTraining();
@@ -102,7 +104,7 @@ public:
         return m_trainingPairs;
     }
 
-    TestVectorType& GetTestData()
+    TestVectorType GetTestData()
     {
         SetFilePaths();
         PcaFeatureExtractionForPrediction();
@@ -133,6 +135,28 @@ protected:
             ParseOutputFiles();
             assert(m_inputFilecount == m_outputFilecount); // use try catch instead
 
+            // Compute PCA
+            auto t0 = std::chrono::system_clock::now();
+            PcaType inputPca(m_inputMatrix);
+            std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+            std::cout << "inputPca done in " << elapsed_seconds.count() << "s" << std::endl;
+
+            t0 = std::chrono::system_clock::now();
+            PcaType outputPca(m_outputMatrix);
+            elapsed_seconds = std::chrono::system_clock::now()-t0;
+            std::cout << "outputPca done in " << elapsed_seconds.count() << "s" << std::endl;
+
+            // Features:
+            std::cout << "GetFeatures:" << std::endl;
+            MatrixType _inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
+            MatrixType _outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
+
+            // Basis:
+            std::cout << "GetBasis:" << std::endl;
+            MatrixType _inputBasis = inputPca.GetBasis(m_numberOfPrincipalModesInput);
+            MatrixType _outputBasis = outputPca.GetBasis(m_numberOfPrincipalModesOutput);
+
+
             // Subtract Mean
             m_inputMean = m_inputMatrix.rowwise().mean();
             m_outputMean = m_outputMatrix.rowwise().mean();
@@ -140,9 +164,9 @@ protected:
             MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
 
             // Compute SVD
-            auto t0 = std::chrono::system_clock::now();
+            t0 = std::chrono::system_clock::now();
             BDCSVDType inputSvd(alignedInput, Eigen::ComputeThinU);
-            std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+            elapsed_seconds = std::chrono::system_clock::now()-t0;
             std::cout << "inputSvd done in " << elapsed_seconds.count() << "s" << std::endl;
 
             t0 = std::chrono::system_clock::now();
@@ -183,14 +207,15 @@ protected:
             std::cout << "outputFeatures: " << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
 
             // Write files
-            WriteToCsvFile(m_pathInputMean, m_inputMean);
-            WriteToCsvFile(m_pathInputU, inputSvd.matrixU());
-            WriteToCsvFile(m_pathInputSigma, fullInputSigma);
-            WriteToCsvFile(m_pathInputFeatures, fullInputFeatures);
-            WriteToCsvFile(m_pathOutputMean, m_outputMean);
-            WriteToCsvFile(m_pathOutputU, outputSvd.matrixU());
-            WriteToCsvFile(m_pathOutputSigma, fullOutputSigma);
-            WriteToCsvFile(m_pathOutputFeatures, fullOutputFeatures);
+            gpr::WriteMatrix<MatrixType>(m_inputMean, m_pathInputMean);
+            gpr::WriteMatrix<MatrixType>(inputSvd.matrixU(), m_pathInputU);
+            gpr::WriteMatrix<MatrixType>(fullInputSigma, m_pathInputSigma);
+            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeatures);
+            gpr::WriteMatrix<MatrixType>(m_outputMean, m_pathOutputMean);
+            gpr::WriteMatrix<MatrixType>(outputSvd.matrixU(), m_pathOutputU);
+            gpr::WriteMatrix<MatrixType>(fullOutputSigma, m_pathOutputSigma);
+            gpr::WriteMatrix<MatrixType>(fullOutputFeatures, m_pathOutputFeatures);
+
             SaveInputMeanAsImage();
             SaveOutputMeanAsImage();
             SaveInputBasisAsImage();
@@ -215,43 +240,174 @@ protected:
 
             VectorType outputC = outputCumSum / outputCumSum(fullOutputSigma.rows()-1);
 
-            WriteToCsvFile(m_outputPrefix + "-inputCompactness.csv", inputC);
-            WriteToCsvFile(m_outputPrefix + "-outputCompactness.csv", outputC);
+            gpr::WriteMatrix<MatrixType>(inputC, m_outputPrefix + "-inputCompactness.bin");
+            gpr::WriteMatrix<MatrixType>(outputC, m_outputPrefix + "-outputCompactness.bin");
+
+
+            // TESTs:
+            // Features:
+            std::cout << "GetFeatures:" << std::endl;
+//            MatrixType _inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
+//            MatrixType _outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
+            if(_inputFeatures.size() != m_inputFeatures.size()){
+                std::cout << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+                std::cout << _inputFeatures.rows() << "x" << _inputFeatures.cols() << std::endl;
+                throw std::string("InputFeatures do not have the same size");
+            }
+            for(int i=0; i<m_inputFeatures.rows(); ++i){
+                for(int j=0; j<m_inputFeatures.cols(); ++j){
+//                    std::cout << "i: " << i << ", j: " << j << m_inputFeatures(i,j) << " " << _inputFeatures(i,j) << std::endl;
+                    if(m_inputFeatures(i,j) != _inputFeatures(i,j)) throw std::string("InputFeatures are not the same!");
+                }
+            }
+            std::cout << "InputFeatures are correctly computed" << std::endl;
+
+            if(_outputFeatures.size() != m_outputFeatures.size()){
+                std::cout << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
+                std::cout << _outputFeatures.rows() << "x" << _outputFeatures.cols() << std::endl;
+                throw std::string("OutputFeatures do not have the same size");
+            }
+            for(int i=0; i<m_outputFeatures.rows(); ++i){
+                for(int j=0; j<m_outputFeatures.cols(); ++j){
+//                    std::cout << "i: " << i << ", j: " << m_outputFeatures(i,j) << " " << _outputFeatures(i,j) << std::endl;
+                    if(m_outputFeatures(i,j) != _outputFeatures(i,j)) throw std::string("OutputFeatures are not the same!");
+                }
+            }
+            std::cout << "OutputFeatures are correctly computed" << std::endl;
+
+            // Basis:
+            std::cout << "GetBasis:" << std::endl;
+//            MatrixType _inputBasis = inputPca.GetBasis(m_numberOfPrincipalModesInput);
+//            MatrixType _outputBasis = outputPca.GetBasis(m_numberOfPrincipalModesOutput);
+            if(_inputBasis.size() != m_inputBasis.size()){
+                std::cout << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
+                std::cout << _inputBasis.rows() << "x" << _inputBasis.cols() << std::endl;
+                throw std::string("InputBasis do not have the same size");
+            }
+            for(int i=0; i<m_inputBasis.rows(); ++i){
+                for(int j=0; j<m_inputBasis.cols(); ++j){
+                    if(m_inputBasis(i,j) != _inputBasis(i,j)) throw std::string("InputBasis are not the same!");
+                }
+            }
+            std::cout << "InputBasis are correctly computed" << std::endl;
+
+            if(_outputBasis.size() != m_outputBasis.size()){
+                std::cout << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
+                std::cout << _outputBasis.rows() << "x" << _outputBasis.cols() << std::endl;
+                throw std::string("OutputBasis do not have the same size");
+            }
+            for(int i=0; i<m_outputBasis.rows(); ++i){
+                for(int j=0; j<m_outputBasis.cols(); ++j){
+                    if(m_outputBasis(i,j) != _outputBasis(i,j)) throw std::string("OutputBasis are not the same!");
+                }
+            }
+            std::cout << "InputBasis are correctly computed" << std::endl;
+
+            // Sigma:
+            std::cout << "GetSigma:" << std::endl;
+            MatrixType _inputSigma = inputPca.GetEigenvalues();
+            MatrixType _outputSigma = outputPca.GetEigenvalues();
+            if(_inputSigma.size() != fullInputSigma.size()){
+                std::cout << fullInputSigma.rows() << "x" << fullInputSigma.cols() << std::endl;
+                std::cout << _inputSigma.rows() << "x" << _inputSigma.cols() << std::endl;
+                throw std::string("InputSigma do not have the same size");
+            }
+            for(int i=0; i<fullInputSigma.rows(); ++i){
+                for(int j=0; j<fullInputSigma.cols(); ++j){
+                    if(fullInputSigma(i,j) != _inputSigma(i,j)) throw std::string("InputSigma are not the same!");
+                }
+            }
+            std::cout << "InputSigma are correctly computed" << std::endl;
+
+            if(_outputSigma.size() != fullOutputSigma.size()){
+                std::cout << fullOutputSigma.rows() << "x" << fullOutputSigma.cols() << std::endl;
+                std::cout << _outputSigma.rows() << "x" << _outputSigma.cols() << std::endl;
+                throw std::string("OutputSigma do not have the same size");
+            }
+            for(int i=0; i<fullOutputSigma.rows(); ++i){
+                for(int j=0; j<fullOutputSigma.cols(); ++j){
+                    if(fullOutputSigma(i,j) != _outputSigma(i,j)) throw std::string("OutputSigma are not the same!");
+                }
+            }
+            std::cout << "InputSigma are correctly computed" << std::endl;
+
+            // Mean:
+            std::cout << "GetMean:" << std::endl;
+            MatrixType _inputMean= inputPca.GetMean();
+            MatrixType _outputMean= outputPca.GetMean();
+            if(_inputMean.size() != m_inputMean.size()){
+                std::cout << m_inputMean.rows() << "x" << m_inputMean.cols() << std::endl;
+                std::cout << _inputMean.rows() << "x" << _inputMean.cols() << std::endl;
+                throw std::string("InputMean do not have the same size");
+            }
+            for(int i=0; i<m_inputMean.rows(); ++i){
+                for(int j=0; j<m_inputMean.cols(); ++j){
+                    if(m_inputMean(i,j) != _inputMean(i,j)) throw std::string("InputMean are not the same!");
+                }
+            }
+            std::cout << "InputMean are correctly computed" << std::endl;
+
+            if(_outputMean.size() != m_outputMean.size()){
+                std::cout << m_outputMean.rows() << "x" << m_outputMean.cols() << std::endl;
+                std::cout << _outputMean.rows() << "x" << _outputMean.cols() << std::endl;
+                throw std::string("OutputMean do not have the same size");
+            }
+            for(int i=0; i<m_outputMean.rows(); ++i){
+                for(int j=0; j<m_outputMean.cols(); ++j){
+                    if(m_outputMean(i,j) != _outputMean(i,j)) throw std::string("OutputMean are not the same!");
+                }
+            }
+            std::cout << "InputMean are correctly computed" << std::endl;
+
+            // Explained Variance:
+            std::cout << "Explained Variance:" << std::endl;
+            VectorType _inputExplainedVar= inputPca.GetExplainedVariance();
+            VectorType _outputExplainedVar = outputPca.GetExplainedVariance();
+            if(_inputExplainedVar.size() != inputC.size()){
+                std::cout << inputC.rows() << "x" << inputC.cols() << std::endl;
+                std::cout << _inputExplainedVar.rows() << "x" << _inputExplainedVar.cols() << std::endl;
+                throw std::string("InputExplainedVariance do not have the same size");
+            }
+            for(int i=0; i<inputC.rows(); ++i){
+                for(int j=0; j<inputC.cols(); ++j){
+                    if(inputC(i,j) != _inputExplainedVar(i,j)) throw std::string("InputExplainedVar are not the same!");
+                }
+            }
+            std::cout << "InputExplainedVar are correctly computed" << std::endl;
+
+            if(_outputExplainedVar.size() != outputC.size()){
+                std::cout << outputC.rows() << "x" << outputC.cols() << std::endl;
+                std::cout << _outputExplainedVar.rows() << "x" << _outputExplainedVar.cols() << std::endl;
+                throw std::string("OutputExplainedVar do not have the same size");
+            }
+            for(int i=0; i<outputC.rows(); ++i){
+                for(int j=0; j<outputC.cols(); ++j){
+                    if(outputC(i,j) != _outputExplainedVar(i,j)) throw std::string("OutputExplainedVar are not the same!");
+                }
+            }
+            std::cout << "OutputExplainedVar are correctly computed" << std::endl;
+
+            std::string path = m_outputPrefix + "-input";
+            inputPca.WriteMatricesToFile(path);
+
+            path = m_outputPrefix + "-output";
+            outputPca.WriteMatricesToFile(path);
 
         }
         else
         {
             // Read Features
-            MatrixType fullInputFeatures = ReadFromCsvFile(m_pathInputFeatures);
+            MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_pathInputFeatures);
             m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
             m_inputFilecount = m_inputFeatures.cols();
             std::cout << "m_inputFilecount: " << m_inputFilecount << std::endl;
 
-            MatrixType fullOutputFeatures = ReadFromCsvFile(m_pathOutputFeatures);
+            MatrixType fullOutputFeatures = gpr::ReadMatrix<MatrixType>(m_pathOutputFeatures);
             m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
             m_outputFilecount = m_outputFeatures.cols();
             std::cout << "m_outputFilecount: " << m_outputFilecount << std::endl;
         }
 
-        // First approach
-        //VectorType ones = VectorType::Constant(m_inputFilecount, 1, 1);
-        //m_inputMean = m_inputMatrix*ones/m_inputFilecount;
-
-        //ones = VectorType::Constant(m_outputFilecount, 1, 1);
-        //m_outputMean = m_outputMatrix*ones/m_outputFilecount;
-
-        //MatrixType inputMatrix01 = m_inputMatrix;
-        //MatrixType outputMatrix01 = m_outputMatrix;
-        //for(unsigned int itr_col; itr_col < m_inputFilecount; ++itr_col)
-        //{
-        //    inputMatrix01.col(itr_col) -= m_inputMean;
-        //    outputMatrix01.col(itr_col) -= m_outputMean;
-        //}
-        //
-        //std::cout << "Input matrix diff: Min " << (inputMatrix01-inputMatrix).minCoeff() << std::endl;
-        //std::cout << "Input matrix diff: Max " << (inputMatrix01-inputMatrix).maxCoeff() << std::endl;
-        //std::cout << "Output matrix diff: Min " << (outputMatrix01-outputMatrix).minCoeff() << std::endl;
-        //std::cout << "Output matrix diff: Max " << (outputMatrix01-outputMatrix).maxCoeff() << std::endl;
     }
 
     void PcaFeatureExtractionForPrediction()
@@ -262,38 +418,108 @@ protected:
             ParseInputFiles();
 
             // Read input mean and basis
-            MatrixType inputU = ReadFromCsvFile(m_pathInputU);
-            VectorType inputSigma = ReadFromCsvFile(m_pathInputSigma);
+            MatrixType inputU = gpr::ReadMatrix<MatrixType>(m_pathInputU);
+            VectorType inputSigma = gpr::ReadMatrix<MatrixType>(m_pathInputSigma);
             MatrixType fullInputBasis = inputU*inputSigma.asDiagonal().inverse();
             m_inputBasis = fullInputBasis.leftCols(m_numberOfPrincipalModesInput);
-            m_inputMean = ReadFromCsvFile(m_pathInputMean);
+            m_inputMean = gpr::ReadMatrix<MatrixType>(m_pathInputMean);
 
             // Feature extraction
             MatrixType alignedInput = m_inputMatrix.colwise() - m_inputMean;
             MatrixType fullInputFeatures = fullInputBasis.transpose() * alignedInput;
             m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
-            WriteToCsvFile(m_pathInputFeaturesForPrediction, fullInputFeatures);
+            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeaturesForPrediction);
+
+
+            // TESTs:
+            std::string path = m_outputPrefix + "-input";
+            PcaType inputPca(path);
+
+            // Features:
+            std::cout << "GetFeatures:" << std::endl;
+            MatrixType _inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
+            if(_inputFeatures.size() != m_inputFeatures.size()){
+                std::cout << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+                std::cout << _inputFeatures.rows() << "x" << _inputFeatures.cols() << std::endl;
+                throw std::string("InputFeatures do not have the same size");
+            }
+            for(int i=0; i<m_inputFeatures.rows(); ++i){
+                for(int j=0; j<m_inputFeatures.cols(); ++j){
+                    if(m_inputFeatures(i,j) != _inputFeatures(i,j)) throw std::string("InputFeatures are not the same!");
+                }
+            }
+            std::cout << "InputFeatures are correctly computed" << std::endl;
+
+            // Basis:
+            std::cout << "GetBasis:" << std::endl;
+            MatrixType _inputBasis = inputPca.GetBasis(m_numberOfPrincipalModesInput);
+            if(_inputBasis.size() != m_inputBasis.size()){
+                std::cout << m_inputBasis.rows() << "x" << m_inputBasis.cols() << std::endl;
+                std::cout << _inputBasis.rows() << "x" << _inputBasis.cols() << std::endl;
+                throw std::string("InputBasis do not have the same size");
+            }
+            for(int i=0; i<m_inputBasis.rows(); ++i){
+                for(int j=0; j<m_inputBasis.cols(); ++j){
+                    if(m_inputBasis(i,j) != _inputBasis(i,j)) throw std::string("InputBasis are not the same!");
+                }
+            }
+            std::cout << "InputBasis are correctly computed" << std::endl;
 
             if(!useTestData)
             {
                 // Parse ground truth files
                 ParseOutputFiles();
 
-                MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
-                VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
+                MatrixType outputU = gpr::ReadMatrix<MatrixType>(m_pathOutputU);
+                VectorType outputSigma = gpr::ReadMatrix<MatrixType>(m_pathOutputSigma);
                 MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal().inverse();
                 m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
-                m_outputMean = ReadFromCsvFile(m_pathOutputMean);
+                m_outputMean = gpr::ReadMatrix<MatrixType>(m_pathOutputMean);
 
                 MatrixType alignedOutput = m_outputMatrix.colwise() - m_outputMean;
                 MatrixType fullOutputFeatures = fullOutputBasis.transpose() * alignedOutput;
                 m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
-                WriteToCsvFile(m_pathGroundTruthFeatures, fullOutputFeatures);
+                gpr::WriteMatrix<MatrixType>(fullOutputFeatures, m_pathGroundTruthFeatures);
+
+
+                // TESTs:
+                std::string path = m_outputPrefix + "-output";
+                PcaType outputPca(path);
+
+                // Features:
+                std::cout << "GetFeatures:" << std::endl;
+                MatrixType _outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
+                if(_outputFeatures.size() != m_outputFeatures.size()){
+                    std::cout << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
+                    std::cout << _outputFeatures.rows() << "x" << _outputFeatures.cols() << std::endl;
+                    throw std::string("OutputFeatures do not have the same size");
+                }
+                for(int i=0; i<m_outputFeatures.rows(); ++i){
+                    for(int j=0; j<m_outputFeatures.cols(); ++j){
+                        if(m_outputFeatures(i,j) != _outputFeatures(i,j)) throw std::string("OutputFeatures are not the same!");
+                    }
+                }
+                std::cout << "OutputFeatures are correctly computed" << std::endl;
+
+                // Basis:
+                std::cout << "GetBasis:" << std::endl;
+                MatrixType _outputBasis = outputPca.GetBasis(m_numberOfPrincipalModesOutput);
+                if(_outputBasis.size() != m_outputBasis.size()){
+                    std::cout << m_outputBasis.rows() << "x" << m_outputBasis.cols() << std::endl;
+                    std::cout << _outputBasis.rows() << "x" << _outputBasis.cols() << std::endl;
+                    throw std::string("OutputBasis do not have the same size");
+                }
+                for(int i=0; i<m_outputBasis.rows(); ++i){
+                    for(int j=0; j<m_outputBasis.cols(); ++j){
+                        if(m_outputBasis(i,j) != _outputBasis(i,j)) throw std::string("OutputBasis are not the same!");
+                    }
+                }
+                std::cout << "OutputBasis are correctly computed" << std::endl;
             }
         }
         else
         {
-            MatrixType fullInputFeatures = ReadFromCsvFile(m_pathInputFeaturesForPrediction);
+            MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_pathInputFeaturesForPrediction);
             m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
             m_inputFilecount = m_inputFeatures.cols();
         }
@@ -309,62 +535,38 @@ protected:
             outputFeatures.col(itr) = v;
             itr++;
         }
-        WriteToCsvFile(m_pathOutputFeaturesForPrediction, outputFeatures);
+        gpr::WriteMatrix<MatrixType>(outputFeatures, m_pathOutputFeaturesForPrediction);
 
         // Read output mean and basis
-        MatrixType outputU = ReadFromCsvFile(m_pathOutputU);
-        VectorType outputSigma = ReadFromCsvFile(m_pathOutputSigma);
+        MatrixType outputU = gpr::ReadMatrix<MatrixType>(m_pathOutputU);
+        VectorType outputSigma = gpr::ReadMatrix<MatrixType>(m_pathOutputSigma);
         MatrixType fullOutputBasis = outputU*outputSigma.asDiagonal(); // not inverse here!
         m_outputBasis = fullOutputBasis.leftCols(m_numberOfPrincipalModesOutput);
-        m_outputMean = ReadFromCsvFile(m_pathOutputMean);
+        m_outputMean = gpr::ReadMatrix<MatrixType>(m_pathOutputMean);
 
         // inverse PCA
         MatrixType alignedOutput = m_outputBasis * outputFeatures;
         m_predictedOutputMatrix =  alignedOutput.colwise() + m_outputMean;
-    }
 
-    void WriteToCsvFile(std::string filename, MatrixType matrix)
-    {
-        std::ofstream file;
-        file.open(filename.c_str(), std::ios::out | std::ios::trunc);
-        for(int i=0; i<matrix.rows(); ++i)
-        {
-            for(int j=0; j<matrix.cols(); ++j)
-            {
-                std::string value = std::to_string(matrix(i,j));
-                if (j == int(matrix.cols())-1)
-                {
-                    file << value;
-                }
-                else
-                {
-                    file << value << ',';
-                }
-            }
-            file << '\n';
+        // TESTs:
+        std::string path = m_outputPrefix + "-output";
+        PcaType outputPca(path);
+
+        // Features:
+        std::cout << "GetFeatures:" << std::endl;
+        MatrixType _outputPredictions = outputPca.GetReconstruction(outputFeatures);
+        if(_outputPredictions.size() != m_predictedOutputMatrix.size()){
+            std::cout << m_predictedOutputMatrix.rows() << "x" << m_predictedOutputMatrix.cols() << std::endl;
+            std::cout << _outputPredictions.rows() << "x" << _outputPredictions.cols() << std::endl;
+            throw std::string("PredictedOutput do not have the same size");
         }
-        file.close();
-        std::cout << filename << " has been written" << std::endl;
-    }
-
-    MatrixType ReadFromCsvFile(const std::string & path) {
-        std::ifstream indata;
-        std::string line;
-        std::vector<double> values;
-        unsigned int rows = 0;
-
-        indata.open(path);
-        while (std::getline(indata, line)) {
-            std::stringstream lineStream(line);
-            std::string cell;
-            while (std::getline(lineStream, cell, ',')) {
-                values.push_back(std::stod(cell));
+        for(int i=0; i<m_predictedOutputMatrix.rows(); ++i){
+            for(int j=0; j<m_predictedOutputMatrix.cols(); ++j){
+//                std::cout << "i: " << i << ", j: " << m_predictedOutputMatrix(i,j) << " " << _outputPredictions(i,j) << std::endl;
+                if(m_predictedOutputMatrix(i,j) != _outputPredictions(i,j)) throw std::string("OutputPredictions are not the same!");
             }
-            ++rows;
         }
-
-        unsigned int cols = values.size()/rows;
-        return Eigen::Map<MatrixType>(values.data(), rows, cols);
+        std::cout << "OutputPredictions are correctly computed" << std::endl;
     }
 
     void CreateTrainingVectorPair()
@@ -652,25 +854,25 @@ protected:
     void SetFilePaths()
     {
         // General/Training
-        //m_fnameInputBasis = "-inputBasis_" + std::to_string(m_numberOfPrincipalModesInput) + ".csv";
-        //m_fnameOutputBasis = "-outputBasis_" + std::to_string(m_numberOfPrincipalModesOutput) + ".csv";
-//        m_fnameInputBasis = "-inputBasis.csv";
-//        m_fnameOutputBasis = "-outputBasis.csv";
+        //m_fnameInputBasis = "-inputBasis_" + std::to_string(m_numberOfPrincipalModesInput) + ".bin";
+        //m_fnameOutputBasis = "-outputBasis_" + std::to_string(m_numberOfPrincipalModesOutput) + ".bin";
+//        m_fnameInputBasis = "-inputBasis.bin";
+//        m_fnameOutputBasis = "-outputBasis.bin";
 
-        m_pathInputMean = m_outputPrefix + "-inputMean.csv";
-        m_pathInputU = m_outputPrefix + "-inputU.csv";;
-        m_pathInputSigma = m_outputPrefix + "-inputSigma.csv";
-        m_pathInputFeatures = m_outputPrefix + "-inputFeatures.csv";
+        m_pathInputMean = m_outputPrefix + "-inputMean.bin";
+        m_pathInputU = m_outputPrefix + "-inputU.bin";;
+        m_pathInputSigma = m_outputPrefix + "-inputSigma.bin";
+        m_pathInputFeatures = m_outputPrefix + "-inputFeatures.bin";
 
-        m_pathOutputMean = m_outputPrefix + "-outputMean.csv";
-        m_pathOutputU = m_outputPrefix + "-outputU.csv";;
-        m_pathOutputSigma = m_outputPrefix + "-outputSigma.csv";
-        m_pathOutputFeatures = m_outputPrefix + "-outputFeatures.csv";
+        m_pathOutputMean = m_outputPrefix + "-outputMean.bin";
+        m_pathOutputU = m_outputPrefix + "-outputU.bin";;
+        m_pathOutputSigma = m_outputPrefix + "-outputSigma.bin";
+        m_pathOutputFeatures = m_outputPrefix + "-outputFeatures.bin";
 
         // Prediction
-        m_pathInputFeaturesForPrediction = m_outputPrefix + "-inputFeatures_prediction.csv";
-        m_pathOutputFeaturesForPrediction = m_outputPrefix + "-outputFeatures_prediction.csv";
-        m_pathGroundTruthFeatures = m_outputPrefix + "-groundtruthFeatures_prediction.csv";
+        m_pathInputFeaturesForPrediction = m_outputPrefix + "-inputFeatures_prediction.bin";
+        m_pathOutputFeaturesForPrediction = m_outputPrefix + "-outputFeatures_prediction.bin";
+        m_pathGroundTruthFeatures = m_outputPrefix + "-groundtruthFeatures_prediction.bin";
     }
 
 private:

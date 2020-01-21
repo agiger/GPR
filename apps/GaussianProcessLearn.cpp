@@ -27,8 +27,11 @@
 #include "KernelFactory.h"
 #include "Kernel.h"
 #include "DataParser.h"
+#include "AutoRegression.h"
+#include "PCA.h"
 
 #include "itkUtils.h"
+#include "MatrixIO.h"
 #include "boost/filesystem.hpp"
 
 typedef gpr::GaussianProcess<double>            GaussianProcessType;
@@ -54,6 +57,9 @@ typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, TRANSFORM_DIMENSIO
 
 typedef DataParser<double, ImageType, DisplacementType>         DataParserType;
 typedef std::shared_ptr<DataParserType>                         DataParserTypePointer;
+typedef AutoRegression<double>                  AutoRegressionType;
+typedef std::shared_ptr<AutoRegressionType>     AutoRegressionTypePointer;
+typedef PCA<double>                  PcaType;
 
 // parsing data
 TrainingPairVectorType GetTrainingData(const std::string& filename){
@@ -258,6 +264,24 @@ int main (int argc, char *argv[]){
     //    std::cout << " - output: " << output_prefix << std::endl << std::endl;
 
     try{
+
+//        AutoRegressionType ar(2,5);
+//        ar.AutoRegressionTest();
+//        MatrixType X = gpr::ReadMatrix<MatrixType>("/tmp/test_theat.txt");
+//        std::cout << X << std::endl;
+//        PcaType pca(X, 1);
+//        MatrixType f = pca.GetFeatures();
+//        MatrixType b = pca.GetBasis();
+//        MatrixType _X = pca.GetReconstructions(f);
+//        MatrixType _f = pca.ComputeFeatures(X);
+//        std::cout << "PCA performed without error for small matrix" << std::endl;
+
+        bool matrix_test = gpr::MatrixIOTest();
+        if(!matrix_test){
+            throw std::string("MatrixIOTest failed");
+        }
+
+
         std::cout << "Initialize Gaussian process... " << std::flush;
         KernelTypePointer kernel = KernelFactoryType::GetKernel(kernel_string);
         GaussianProcessTypePointer gp(new GaussianProcessType(kernel));
