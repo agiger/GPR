@@ -14,6 +14,7 @@ INSTALL(FILES
         itkUtils.h
         DataParser.h
         AutoRegression.h
+        PCA.h
 DESTINATION
         include
 PERMISSIONS
