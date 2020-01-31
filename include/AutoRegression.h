@@ -45,17 +45,18 @@ public:
 
 
 
-    void ComputeModel(MatrixType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
+    void ComputeModel(MatrixType& X, int nBatchTypes=0, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
     {
         // Initialise data
         int nSamples = 0;
         int nBatches = 0;
-        if(nBatchTypes == 1){
+        if(nBatchTypes == 0){
+            nBatchTypes = 1;
             batchSize = new int[nBatchTypes];
             batchRepetition = new int[nBatchTypes];
-            batchSize[0] = X.rows();
-            batchRepetition[0] = 1;
-            nBatches = 1;
+            nBatches = (int)(X.rows()/m_p);
+            batchSize[0] = m_p;
+            batchRepetition[0] = nBatches;
         }
         else{
             for(int b=0; b<nBatchTypes; ++b) {
@@ -63,7 +64,7 @@ public:
                 nBatches += batchRepetition[b];
             }
             if(nSamples != X.rows()){
-                throw std::string("Batch parameters not correctly defined");
+                throw std::invalid_argument("Batch parameters not correctly defined");
             }
         }
 
@@ -105,17 +106,20 @@ public:
         m_theta = theta;
     }
 
-    MatrixType Predict(MatrixType& X, int nBatchTypes=1, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
+    MatrixType Predict(MatrixType& X, int nBatchTypes=0, int* batchSize=NULL, int* batchRepetition=NULL,
+            bool onePredictionPerBatch = false, bool verbose=false)
     {
         // Initialise data
         int nSamples = 0;
         int nBatches = 0;
-        if(nBatchTypes == 1){
+        if(nBatchTypes == 0){
+            nBatchTypes = 1;
             batchSize = new int[nBatchTypes];
             batchRepetition = new int[nBatchTypes];
-            batchSize[0] = X.rows();
-            batchRepetition[0] = 1;
-            nBatches = 1;
+            nBatches = (int)(X.rows()/m_p);
+            batchSize[0] = m_p;
+            batchRepetition[0] = nBatches;
+            onePredictionPerBatch = true;
         }
         else{
             for(int b=0; b<nBatchTypes; ++b) {
@@ -123,7 +127,7 @@ public:
                 nBatches += batchRepetition[b];
             }
             if(nSamples != X.rows()){
-                throw std::string("Batch parameters not correctly defined");
+                throw std::invalid_argument("Batch parameters not correctly defined");
             }
         }
 
@@ -164,6 +168,15 @@ public:
                 if(verbose) {std::cout << "DStep:\n" << DStep << std::endl;}
             }
             YPred.col(f) = YStep;
+        }
+
+        if(onePredictionPerBatch){
+            MatrixType YPredRed = MatrixType::Zero(nBatches, nFeatures);
+
+            for(int b=0; b<nBatches; ++b){
+                YPredRed.row(b) = YPred.row((b+1)*(batchSize[0]-1)-1);
+            }
+            return YPredRed;
         }
 
         return YPred;

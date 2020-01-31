@@ -244,6 +244,7 @@ int main (int argc, char *argv[]){
         use_precomputed = false;
         use_test_data = true;
     }
+    std::string ar_folder = "";
 
     try{
         std::cout << "Initialize Gaussian process... " << std::flush;
@@ -256,7 +257,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
         //        TestVectorType test_vectors = GetTestData(input_filename);
         //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, gp_prefix, n_inputModes, n_outputModes, use_precomputed, use_test_data));
+        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, ar_folder, gp_prefix, n_inputModes, n_outputModes, use_precomputed, use_test_data));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 

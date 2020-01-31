@@ -17,6 +17,7 @@ Output * Comment
 #include "GaussianProcess.h"
 #include "MatrixIO.h"
 #include "PCA.h"
+#include "AutoRegression.h"
 
 #include "itkUtils.h"
 
@@ -42,14 +43,16 @@ public:
 
     typedef Eigen::JacobiSVD<MatrixType>                    JacobiSVDType;
     typedef Eigen::BDCSVD<MatrixType>                       BDCSVDType;
-    typedef PCA<TScalarType>                                     PcaType;
+    typedef PCA<TScalarType>                                    PcaType;
+    typedef AutoRegression<TScalarType>                     AutoRegressionType;
 
-    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, int ind_start_train, int n_train_images, bool use_precomputed)
+    DataParser(std::string input_path, std::string output_path, std::string ar_path, std::string output_prefix, int input_modes, int output_modes, int ind_start_train, int n_train_images, bool use_precomputed)
     {
         usePrecomputed = use_precomputed;
         useTestData = false;
         m_srcPathInput = input_path;
         m_srcPathOutput = output_path;
+        m_srcPathAR = ar_path;
         m_destPrefix = output_prefix;
         m_numberOfPrincipalModesInput = input_modes;
         m_numberOfPrincipalModesOutput= output_modes;
@@ -59,14 +62,34 @@ public:
         std::cout << "indStart: " << m_indStartTrain << std::endl;
         std::cout << "indEnd: " << m_indEndTrain << std::endl;
         std::cout << "nImgs: " << m_nTrainingImages << std::endl;
+
+        SetFilePaths();
+        ReadFilenames(m_inputFiles, m_srcPathInput);
+        ReadFilenames(m_outputFiles, m_srcPathOutput);
+        std::cout << m_inputFiles.front() << std::endl;
+        std::cout << m_outputFiles.front() << std::endl;
+
+        // For drift analysis
+        if(m_nTrainingImages != 0)
+        {
+            m_inputFiles.erase(m_inputFiles.begin()+m_indEndTrain+1, m_inputFiles.end());
+            m_inputFiles.erase(m_inputFiles.begin(), m_inputFiles.begin()+m_indStartTrain);
+        }
+
+        // For autoregression
+        if(!m_srcPathAR.empty()){
+            ReadFilenames(m_arFilesTrain, m_srcPathAR + "/train");
+            ReadFilenames(m_arFilesTest, m_srcPathAR + "/test");
+        }
     }
 
-    DataParser(std::string input_path, std::string output_path, std::string output_prefix, int input_modes, int output_modes, bool use_precomputed, bool use_test_data)
+    DataParser(std::string input_path, std::string output_path, std::string ar_path, std::string output_prefix, int input_modes, int output_modes, bool use_precomputed, bool use_test_data)
     {
         usePrecomputed = use_precomputed;
         useTestData = use_test_data;
         m_srcPathInput = input_path;
         m_srcPathOutput = output_path;
+        m_srcPathAR = ar_path;
         m_destPrefix = output_prefix;
         m_numberOfPrincipalModesInput = input_modes;
         m_numberOfPrincipalModesOutput= output_modes;
@@ -76,29 +99,126 @@ public:
         std::cout << "indStart: " << m_indStartTrain << std::endl;
         std::cout << "indEnd: " << m_indEndTrain << std::endl;
         std::cout << "nImgs: " << m_nTrainingImages << std::endl;
+
+        SetFilePaths();
+        ReadFilenames(m_inputFiles, m_srcPathInput);
+        ReadFilenames(m_outputFiles, m_srcPathOutput);
+        std::cout << m_inputFiles.front() << std::endl;
+        std::cout << m_outputFiles.front() << std::endl;
+
+        // For drift analysis
+        if(m_nTrainingImages != 0)
+        {
+            m_inputFiles.erase(m_inputFiles.begin()+m_indEndTrain+1, m_inputFiles.end());
+            m_inputFiles.erase(m_inputFiles.begin(), m_inputFiles.begin()+m_indStartTrain);
+        }
+
+        // For autoregression
+        if(!m_srcPathAR.empty()){
+            ReadFilenames(m_arFilesTrain, m_srcPathAR + "/train");
+            ReadFilenames(m_arFilesTest, m_srcPathAR + "/test");
+        }
     }
 
     ~DataParser(){}
 
     TrainingPairVectorType GetTrainingData()
     {
-        SetFilePaths();
-        PcaFeatureExtractionForTraining();
+        if(!usePrecomputed)
+        {
+            ParseImageFiles(m_inputMatrix, m_inputFiles);
+            ParseDisplacementFiles(m_outputMatrix, m_outputFiles);
+            if(m_inputMatrix.cols() % m_outputMatrix.cols() != 0){
+                throw std::invalid_argument("Wrong number of input or output files");
+            }
+
+            ComputeFeaturesForTraining(m_outputFeatures, m_outputMatrix, m_numberOfPrincipalModesOutput, m_destPrefixOutput, m_outputFiles.front());
+            if(m_srcPathAR.empty()){
+                ComputeFeaturesForTraining(m_inputFeatures, m_inputMatrix, m_numberOfPrincipalModesInput, m_destPrefixInput, m_inputFiles.front());
+            }
+            else{
+                // AR
+                ParseImageFiles(m_arMatrixTrain, m_arFilesTrain);
+                ParseImageFiles(m_arMatrixTest, m_arFilesTest);
+
+                // Concatenate Matrices & Features
+                MatrixType concatArMatrix(m_arMatrixTrain.rows(), m_arMatrixTrain.cols() + m_arMatrixTest.cols());
+                concatArMatrix.leftCols(m_arMatrixTrain.cols()) = m_arMatrixTrain;
+                concatArMatrix.rightCols(m_arMatrixTest.cols()) = m_arMatrixTest;
+
+                MatrixType concatInputMatrix(m_inputMatrix.rows(), m_inputMatrix.cols() +  concatArMatrix.cols());
+                concatInputMatrix.leftCols(m_inputMatrix.cols()) = m_inputMatrix;
+                concatInputMatrix.rightCols(concatArMatrix.cols()) = concatArMatrix;
+
+                // Compute Features for concatenated input matrix
+                MatrixType concatInputFeatures;
+                ComputeFeaturesForTraining(concatInputFeatures, concatInputMatrix, m_numberOfPrincipalModesInput, m_destPrefixInput, m_inputFiles.front());
+
+                // Split Features
+                MatrixType inputFeaturesTranspose = concatInputFeatures.leftCols(m_inputMatrix.cols()).transpose();
+                MatrixType concatArFeatures = concatInputFeatures.rightCols(concatArMatrix.cols());
+                MatrixType arFeaturesTrainTranspose = concatArFeatures.leftCols(m_arMatrixTrain.cols()).transpose();
+                MatrixType arFeaturesTestTranspose = concatArFeatures.rightCols(m_arMatrixTest.cols()).transpose();
+
+                // TODO: Compute AR model
+                int nBatchTypes = 1;
+                int batchSize[nBatchTypes] = {75};
+                int batchRepetition[nBatchTypes] = {8};
+                AutoRegressionType ar(2, 5);
+                ar.ComputeModel(arFeaturesTrainTranspose, nBatchTypes, batchSize, batchRepetition);
+                ar.WriteModelParametersToFile(m_destPrefix + "-arModel.bin");
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose).transpose();
+                MatrixType arFeaturesTestPredictTranspose = ar.Predict(arFeaturesTestTranspose);
+
+                gpr::WriteMatrix<MatrixType>(arFeaturesTestTranspose, m_destPrefix + "-arFeaturesTest.bin");
+                gpr::WriteMatrix<MatrixType>(arFeaturesTestPredictTranspose, m_destPrefix + "-arFeaturesTestPredict.bin");
+
+                std::cout << "concatInputFeatures: " << concatInputFeatures.rows() << " x " << concatInputFeatures.cols() << std::endl;
+                std::cout << "arFeaturesTrainTranspose: " << arFeaturesTrainTranspose.rows() << " x " << arFeaturesTrainTranspose.cols() << std::endl;
+                std::cout << "arFeaturesTestTranspose: " << arFeaturesTestTranspose.rows() << " x " << arFeaturesTestTranspose.cols() << std::endl;
+                std::cout << "arFeaturesTestPredict: " << arFeaturesTestPredictTranspose.rows() << " x " << arFeaturesTestPredictTranspose.cols() << std::endl;
+                std::cout << "inputFeatures: " << inputFeaturesTranspose.rows() << " x " << inputFeaturesTranspose.cols() << std::endl;
+                std::cout << "m_inputFeatures: " << m_inputFeatures.rows() << " x " << m_inputFeatures.cols() << std::endl;
+            }
+        }
+        else
+        {
+            // Read output features
+            MatrixType fullOutputFeatures = gpr::ReadMatrix<MatrixType>(m_destPrefixOutput + "Features.bin");
+            m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
+
+            if(m_srcPathAR.empty()){
+                // Read input features
+                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_destPrefixInput + "Features.bin");
+                m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            }
+            else{
+                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_destPrefixInput + "Features.bin");
+                MatrixType concatInputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+                MatrixType inputFeaturesTranspose = concatInputFeatures.leftCols(m_inputFiles.size()).transpose();
+
+                // Autoregression: predict input features
+                AutoRegressionType ar(2,5);
+                ar.ReadModelParametersFromFile(m_destPrefix + "-arModel.bin");
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose).transpose();
+            }
+        }
+
+        std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
         CreateTrainingVectorPair();
         return m_trainingPairs;
     }
 
     TestVectorType GetTestData()
     {
-        SetFilePaths();
         PcaFeatureExtractionForPrediction();
+        std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
         CreateTestVector();
         return m_testVector;
     }
 
     TestVectorType GetResults(TestVectorType predicted_features)
     {
-        SetFilePaths();
         m_predictedFeatures = predicted_features;
         inversePca();
         CreatePredictionVector();
@@ -107,6 +227,38 @@ public:
     }
 
 protected:
+    void ComputeFeaturesForTraining(MatrixType& features, MatrixType& matrix, int nModes, std::string prefix, std::string reference)
+    {
+        // Compute PCA
+        auto t0 = std::chrono::system_clock::now();
+        PcaType pca(matrix);
+        std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "Pca done in " << elapsed_seconds.count() << "s" << std::endl;
+
+        // Features
+        features = pca.DimensionalityReduction(matrix, nModes);
+
+        // Save mean and basis as images
+        VectorType mean = pca.GetMean();
+        MatrixType basis = pca.GetBasis(nModes);
+        WriteVectorToImage(mean, reference, prefix + "Mean.vtk");
+        WriteMatrixToImageSeries(basis, reference, prefix);
+
+        // Explained Variance
+        VectorType explainedVar= pca.GetExplainedVariance();
+        gpr::WriteMatrix<MatrixType>(explainedVar, prefix + "Compactness.bin");
+
+        // Write files
+        pca.WriteMatricesToFile(prefix);
+
+        MatrixType fullFeatures = pca.DimensionalityReduction(matrix);
+        gpr::WriteMatrix<MatrixType>(fullFeatures, prefix + "Features.bin");
+
+        std::cout << "Basis: " << basis.rows() << "x" << basis.cols() << std::endl;
+        std::cout << "Features: " << features.rows() << "x" << features.cols() << std::endl;
+
+        return;
+    }
 
     void PcaFeatureExtractionForTraining()
     {
@@ -181,17 +333,28 @@ protected:
         if(!usePrecomputed)
         {
             // Parse input files
-            ParseInputFiles();
+            ParseImageFiles(m_inputMatrix, m_inputFiles);
             PcaType inputPca(m_destPrefixInput);
 
-            m_inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
-            MatrixType m_fullInputFeatures = inputPca.DimensionalityReduction(m_inputMatrix);
-            gpr::WriteMatrix<MatrixType>(m_fullInputFeatures, m_pathInputFeatures);
+            MatrixType fullInputFeatures = inputPca.DimensionalityReduction(m_inputMatrix);
+            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeaturesForPrediction);
+
+            if(m_srcPathAR.empty()){
+                m_inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
+            }
+            else{
+                MatrixType inputFeaturesTranspose = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput).transpose();
+
+                // Autoregression: predict input features
+                AutoRegressionType ar(2,5);
+                ar.ReadModelParametersFromFile(m_destPrefix + "-arModel.bin");
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose).transpose();
+            }
 
             if(!useTestData)
             {
                 // Parse ground truth files
-                ParseOutputFiles();
+                ParseDisplacementFiles(m_outputMatrix, m_outputFiles);
                 PcaType outputPca(m_destPrefixOutput);
 
                 m_outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
@@ -202,7 +365,17 @@ protected:
         else
         {
             MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_pathInputFeaturesForPrediction);
-            m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            if(m_srcPathAR.empty()){
+                m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
+            }
+            else{
+                MatrixType inputFeaturesTranspose = fullInputFeatures.topRows(m_numberOfPrincipalModesInput).transpose();
+
+                // Autoregression: predict input features
+                AutoRegressionType ar(2,5);
+                ar.ReadModelParametersFromFile(m_destPrefix + "-arModel.bin");
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose).transpose();
+            }
         }
     }
 
@@ -228,6 +401,7 @@ protected:
             VectorType v_input = m_inputFeatures.col(itr_file);
             VectorType v_output = m_outputFeatures.col(itr_file);
             m_trainingPairs.push_back(std::make_pair(v_input, v_output));
+            std::cout << itr_file << std::endl;
         }
     }
 
@@ -248,6 +422,97 @@ protected:
             m_predictionVector.push_back(v_prediction);
         }
     }
+
+    void ReadFilenames(std::vector<std::string>& files, std::string path)
+    {
+        for(const auto & p : std::experimental::filesystem::directory_iterator(path))
+        {
+            files.push_back(p.path().string());
+        }
+        sort(files.begin(), files.end());
+        std::cout << "Filecount: " << files.size() << std::endl;
+    }
+
+    void ParseImageFiles(MatrixType& matrix, std::vector<std::string>& filenames)
+    {
+        // Identify vector size
+        typename TInputType::Pointer image = ReadImage<TInputType>(filenames.front());
+        typename TInputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
+        static unsigned int image_dim = size.GetSizeDimension();
+
+        int imageVectorSize = 1;
+        for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
+            imageVectorSize *= size[itr_dim];
+        }
+
+        // Loop over all files
+        unsigned int counter_file = 0;
+        matrix = MatrixType::Zero(imageVectorSize, filenames.size());
+        for(std::string & file : filenames)
+        {
+            // Read data
+            typename TInputType::Pointer image = ReadImage<TInputType>(file);
+
+            // Fill Eigen vector with data
+            itk::ImageRegionConstIterator <TInputType> image_iterator(image, image->GetRequestedRegion());
+
+            image_iterator.GoToBegin();
+            unsigned long counter_pix = 0;
+            while (!image_iterator.IsAtEnd())
+            {
+                auto pixel = image_iterator.Get();
+                matrix(counter_pix, counter_file) = (TScalarType)pixel/(TScalarType)255;
+                ++counter_pix;
+                ++image_iterator;
+            }
+            ++counter_file;
+        } // end for all files
+
+        return;
+    }
+
+
+    void ParseDisplacementFiles(MatrixType& matrix, std::vector<std::string>& filenames)
+    {
+        // Identify vector size
+        typename TOutputType::Pointer image = ReadImage<TOutputType>(filenames.front());
+        typename TOutputType::SizeType size = image->GetLargestPossibleRegion().GetSize();
+        static unsigned int image_dim = size.GetSizeDimension();
+
+        int displacementVectorSize = TRANSFORM_DIMENSIONS;
+        for (unsigned itr_dim = 0; itr_dim < image_dim; ++itr_dim) {
+            displacementVectorSize *= size[itr_dim];
+        }
+
+        // Loop over all files
+        unsigned int counter_file = 0;
+        matrix = MatrixType::Zero(displacementVectorSize, filenames.size());
+        for(std::string & file : filenames)
+        {
+            // Read data
+            typename TOutputType::Pointer image = ReadImage<TOutputType>(file);
+
+            // Fill Eigen vector with data
+            itk::ImageRegionConstIterator <TOutputType> image_iterator(image, image->GetRequestedRegion());
+
+            image_iterator.GoToBegin();
+            unsigned long counter_pix = 0;
+            while (!image_iterator.IsAtEnd())
+            {
+                auto pixel = image_iterator.Get();
+                for (int itr_df = 0; itr_df < TRANSFORM_DIMENSIONS; ++itr_df)
+                {
+                    matrix(counter_pix, counter_file) = (TScalarType)pixel[itr_df];
+                    ++counter_pix;
+                }
+                ++image_iterator;
+            }
+            ++counter_file;
+        } // end for all files
+
+        return;
+    }
+
 
     void ParseInputFiles()
     {
@@ -469,11 +734,16 @@ private:
 
     std::string m_srcPathInput;
     std::string m_srcPathOutput;
+    std::string m_srcPathAR;
     std::vector<std::string> m_inputFiles;
     std::vector<std::string> m_outputFiles;
+    std::vector<std::string> m_arFilesTrain;
+    std::vector<std::string> m_arFilesTest;
 
     MatrixType m_inputMatrix;
     MatrixType m_outputMatrix;
+    MatrixType m_arMatrixTrain;
+    MatrixType m_arMatrixTest;
     MatrixType m_predictedOutputMatrix;
 
     MatrixType m_inputFeatures;

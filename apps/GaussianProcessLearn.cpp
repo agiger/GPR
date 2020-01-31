@@ -212,11 +212,16 @@ TrainingPairVectorType GetTrainingDataITK(const std::string& input, const std::s
 }
 
 
-int main (int argc, char *argv[]){
+int main (int argc, char *argv[]) {
     std::cout << "Gaussian process training app:" << std::endl;
 
-    if(argc!=10 && argc!=11){
-        std::cout << "Usage: " << argv[0] << " input_folder output_folder kernel_string data_noise output_gp n_inputModes n_outputModes startTrainImg n_TrainImgs [use_precomputed]" << std::endl;
+//    if (argc != 11 && argc != 12) {
+    if (argc < 11 || (argc > 11 && argc < 17)) {
+        std::cout << "Usage: " << argv[0] << " input_folder output_folder"
+                                             " kernel_string data_noise output_gp n_inputModes n_outputModes"
+                                             " startTrainImg n_TrainImgs use_precomputed"
+                                             " [AR_folder n p nBatchTypes {batchSizes} {batchRepetitions}]"
+                                             " config.json" << std::endl;
 
         //        std::cout << "Usage: " << argv[0] << " data.csv kernel_string data_noise output_gp" << std::endl;
 
@@ -233,29 +238,71 @@ int main (int argc, char *argv[]){
     std::string output_folder = argv[++itr_argv];
     std::string kernel_string = argv[++itr_argv];
     double gp_sigma;
-    std::stringstream ss; ss << argv[++itr_argv]; ss >> gp_sigma;
+    std::stringstream ss;
+    ss << argv[++itr_argv];
+    ss >> gp_sigma;
     std::string output_prefix = argv[++itr_argv];
 
     int n_inputModes;
-    std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
+    std::stringstream ss_nIn;
+    ss_nIn << argv[++itr_argv];
+    ss_nIn >> n_inputModes;
     int n_outputModes;
-    std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
+    std::stringstream ss_nOut;
+    ss_nOut << argv[++itr_argv];
+    ss_nOut >> n_outputModes;
     int ind_startTrainImg;
-    std::stringstream ss_startTrain; ss_startTrain << argv[++itr_argv]; ss_startTrain >> ind_startTrainImg;
+    std::stringstream ss_startTrain;
+    ss_startTrain << argv[++itr_argv];
+    ss_startTrain >> ind_startTrainImg;
     int n_trainImages;
-    std::stringstream ss_nTrain; ss_nTrain << argv[++itr_argv]; ss_nTrain >> n_trainImages;
-    bool use_precomputed = false;
-    if(argc==11)
-    {
-        use_precomputed = true;
+    std::stringstream ss_nTrain;
+    ss_nTrain << argv[++itr_argv];
+    ss_nTrain >> n_trainImages;
+    bool use_precomputed;
+    std::stringstream ss_precomp;
+    ss_precomp << argv[++itr_argv];
+    ss_precomp >> use_precomputed;
+
+    std::string ar_folder = "";
+    int n = 0;
+    int p = 0;
+    int nBatchTypes = 0;
+    int *batchSize = NULL;
+    int *batchRepetition = NULL;
+    if(argc >= 17){
+        ar_folder = argv[++itr_argv];
+        std::stringstream ss_n; ss_n << argv[++itr_argv]; ss_n >> n;
+        std::stringstream ss_p; ss_p << argv[++itr_argv]; ss_p >> p;
+        std::stringstream ss_nBatchTypes; ss_nBatchTypes << argv[++itr_argv]; ss_nBatchTypes >> nBatchTypes;
+        std::cout << argc << " " << itr_argv << std::endl;
+        std::cout << (argc - itr_argv - 1) << " " << 2*nBatchTypes << std::endl;
+//        if((argc - itr_argv - 1) != (2*nBatchTypes)){
+//            throw std::invalid_argument("AR batch parameters not correctly defined");
+//        }
+
+        batchSize = new int[nBatchTypes];
+        batchRepetition = new int[nBatchTypes];
+        for(int b=0; b<nBatchTypes; ++b){
+            std::stringstream ss_b; ss_b << argv[++itr_argv]; ss_b >> batchSize[b];
+            std::cout << "batchSize, itr: " << batchSize[b] << ", " << b << std::endl;
+        }
+        for(int b=0; b<nBatchTypes; ++b){
+            std::stringstream ss_b; ss_b << argv[++itr_argv]; ss_b >> batchRepetition[b];
+            std::cout << "batchRepetition, itr: " << batchRepetition[b] << ", " << b << std::endl;
+        }
     }
 
+    std::cout << argc << std::endl;
+    std::cout << "String" << ar_folder << std::endl;
 
-    //    std::string data_filename = argv[1];
-    //    std::string kernel_string = argv[2];
-    //    double gp_sigma;
-    //    std::stringstream ss; ss << argv[3]; ss >> gp_sigma;
-    //    std::string output_prefix = argv[4];
+    std::cout << "use_precomputed: " << use_precomputed << std::endl;
+    if(use_precomputed){
+        std::cout << "use_precomputed = true" << std::endl;
+    }
+    else{
+        std::cout << "use_precomputed = false" << std::endl;
+    }
 
     //    std::cout << "Configuration: " << std::endl;
     //    std::cout << " - data: " << data_filename << std::endl;
@@ -264,24 +311,6 @@ int main (int argc, char *argv[]){
     //    std::cout << " - output: " << output_prefix << std::endl << std::endl;
 
     try{
-
-//        AutoRegressionType ar(2,5);
-//        ar.AutoRegressionTest();
-//        MatrixType X = gpr::ReadMatrix<MatrixType>("/tmp/test_theat.txt");
-//        std::cout << X << std::endl;
-//        PcaType pca(X, 1);
-//        MatrixType f = pca.GetFeatures();
-//        MatrixType b = pca.GetBasis();
-//        MatrixType _X = pca.GetReconstructions(f);
-//        MatrixType _f = pca.ComputeFeatures(X);
-//        std::cout << "PCA performed without error for small matrix" << std::endl;
-
-        bool matrix_test = gpr::MatrixIOTest();
-        if(!matrix_test){
-            throw std::string("MatrixIOTest failed");
-        }
-
-
         std::cout << "Initialize Gaussian process... " << std::flush;
         KernelTypePointer kernel = KernelFactoryType::GetKernel(kernel_string);
         GaussianProcessTypePointer gp(new GaussianProcessType(kernel));
@@ -290,7 +319,7 @@ int main (int argc, char *argv[]){
         std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::flush;
         //        TrainingPairVectorType train_pairs = GetTrainingData(data_filename);
         //        TrainingPairVectorType train_pairs = GetTrainingDataITK(input_filename, output_filename);
-        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, output_prefix, n_inputModes, n_outputModes, ind_startTrainImg, n_trainImages, use_precomputed));
+        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, ar_folder, output_prefix, n_inputModes, n_outputModes, ind_startTrainImg, n_trainImages, use_precomputed));
         assert(parser->GetNumberOfInputFiles == parser->GetNumberOfOutputFiles);
         TrainingPairVectorType train_pairs = parser->GetTrainingData();
 
