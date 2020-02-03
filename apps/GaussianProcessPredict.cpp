@@ -49,116 +49,9 @@ typedef itk::Image<itk::Vector<double, TRANSFORM_DIMENSIONS>, IMAGE_DIMENSIONS> 
 typedef DataParser<double, ImageType, DisplacementType >           DataParserType;
 typedef std::shared_ptr<DataParserType>         DataParserTypePointer;
 
-// parsing data
-TestVectorType GetTestData(const std::string& filename){
-    TestVectorType test_vectors;
-
-    bool parse = true;
-
-    unsigned input_dimension = 0;
-
-    std::ifstream infile;
-    try{
-        infile.open(filename);
-    }
-    catch(...){
-        throw std::string("GetTestData: could not read input file");
-    }
-
-    std::string line;
-
-    // read header
-    if(std::getline(infile, line)){
-        std::istringstream iss(line);
-
-        if (!(iss >> input_dimension)) { throw std::string("GetTestData: could not read header"); }
-    }
-    else{
-        throw std::string("GetTestData: could not read header");
-    }
-
-    // read rest of the data
-    while (std::getline(infile, line))
-    {
-        VectorType v_input = VectorType::Zero(input_dimension);
-
-        std::istringstream iss(line);
-        for(unsigned i=0; i<input_dimension; i++){
-            double number;
-            if (!(iss >> number)) { parse=false; break; }
-            v_input[i] = number;
-        }
-
-        test_vectors.push_back(v_input);
-    }
-    if(!parse) throw std::string("GetTestData: error in parsing data.");
-
-    return test_vectors;
-
-}
-
-// new data parser
-TestVectorType GetTestDataITK(const std::string& input)
-{
-    TestVectorType test_vectors;
-
-    boost::filesystem::path input_path(input);
-    int file_count = std::distance(boost::filesystem::directory_iterator(input_path),
-                                         boost::filesystem::directory_iterator());
-
-//    std::cout << input_path << std::endl;
-//    std::cout << file_count << std::endl;
-
-    // Loop over all files
-    for(unsigned int itr_file = 0; itr_file < file_count; ++itr_file)
-    {
-        char fname[20];
-        int n = sprintf(fname, "%05d", itr_file);
-
-        // Read data
-        ImageType::Pointer input_image = ReadImage<ImageType>(input + "/" + fname + ".png");
-
-        // Define data dimensions
-        typename ImageType::SizeType input_size = input_image->GetLargestPossibleRegion().GetSize();
-
-        static unsigned int input_dim = input_size.GetSizeDimension();
-
-        unsigned int input_vector_size = 1;
-
-        for(int itr_dim = 0; itr_dim < input_dim; ++itr_dim)
-        {
-            input_vector_size *= input_size[itr_dim];
-        }
-
-//        std::cout << input_dim << std::endl;
-//        std::cout << input_size << "\t" << input_vector_size << std::endl;
-
-        // Fill Eigen vector with data
-        itk::ImageRegionConstIterator<ImageType> input_iterator(input_image, input_image->GetRequestedRegion());
-
-        VectorType v_input = VectorType::Zero(input_vector_size);
-
-        // input vector
-        input_iterator.GoToBegin();
-        unsigned long counter = 0;
-        while(!input_iterator.IsAtEnd())
-        {
-            double number = input_iterator.Get();
-            v_input[counter] = number;
-            ++counter;
-            ++input_iterator;
-        }
-
-        test_vectors.push_back(v_input);
-
-    } // end for all files
-
-    return test_vectors;
-}
 
 void SavePrediction(const TestVectorType& vectors, const std::string& output_dir,
                     const std::string& filename)
-//                    typename DisplacementType::SizeType size)
 {
     MasterImageType::Pointer reference = ReadImage<MasterImageType>(filename);
     MasterImageType::SizeType size = reference->GetLargestPossibleRegion().GetSize();
@@ -210,41 +103,38 @@ void WriteConfidenceToFile(std::string filename, std::vector<double> confidence)
 }
 
 int main (int argc, char *argv[]){
-    std::cout << "Gaussian process prediction app:" << std::endl;
-
-    if(argc!=8 && argc!=9 && argc!=10){
-        //        std::cout << "Usage: " << argv[0] << " gp_prefix input.csv output.csv" << std::endl;
-        std::cout << "Usage: " << argv[0] << " gp_prefix input_folder output_folder ground_truth_folder reference input_modes output_modes [use_precomputed]" << std::endl;
-        // TODO: remove input_modes + output_modes
+    std::cout << "\nGaussian process prediction app:" << std::endl;
+    if (argc !=8){
+        std::cout << "Usage: " << argv[0] << " <path/to/config_model.json> <path/to/config_predict.json>"
+                                             " gpr_prefix input_folder groundtruth_folder"
+                                             " result_folder reference_file" << std::endl;
         return -1;
     }
 
     unsigned int itr_argv = 0;
-    std::string gp_prefix = argv[++itr_argv];
-    std::string input_dir= argv[++itr_argv];
-    std::string output_dir = argv[++itr_argv];
-    std::string ground_truth_dir = argv[++itr_argv];
+    std::ifstream ifs_model(argv[++itr_argv]);
+    json config_model = json::parse(ifs_model);
+    std::ifstream ifs_predict(argv[++itr_argv]);
+    json config_predict = json::parse(ifs_predict);
+    std::string gpr_prefix = argv[++itr_argv];
+
+    std::string input_folder = argv[++itr_argv];
+    std::string groundtruth_folder = argv[++itr_argv];
+    std::string result_folder = argv[++itr_argv];
     std::string reference = argv[++itr_argv];
 
-    // TODO: check if output_dir exists, if not -> create it
+    // GP configuration
+    std::string kernel_string = config_model["kernel_string"].get<std::string>();
+    double data_noise = config_model["data_noise"].get<double>();
 
-    int n_inputModes;
-    std::stringstream ss_nIn; ss_nIn << argv[++itr_argv]; ss_nIn >> n_inputModes;
-    int n_outputModes;
-    std::stringstream ss_nOut; ss_nOut << argv[++itr_argv]; ss_nOut >> n_outputModes;
-    bool use_precomputed = false;
-    if(argc==9)
-    {
-        use_precomputed = true;
-    }
-
-    bool use_test_data = false;
-    if(argc==10)
-    {
-        use_precomputed = false;
-        use_test_data = true;
-    }
-    std::string ar_folder = "";
+    std::cout << "Configuration: " << std::endl;
+    std::cout << " - kernel string: " << kernel_string << std::endl;
+    std::cout << " - data noise: " << data_noise << std::endl;
+    std::cout << " - gpr prefix: " << gpr_prefix << std::endl;
+    std::cout << " - input data: " << input_folder << std::endl;
+    std::cout << " - ground truth data: " << groundtruth_folder << std::endl;
+    std::cout << " - result folder: " << result_folder << std::endl;
+    std::cout << " - reference file: " << reference<< std::endl << std::endl;
 
     try{
         std::cout << "Initialize Gaussian process... " << std::flush;
@@ -252,12 +142,10 @@ int main (int argc, char *argv[]){
         typedef std::shared_ptr<WhiteKernelType>    WhiteKernelTypePointer;
         WhiteKernelTypePointer wk(new WhiteKernelType(1)); // dummy kernel
         GaussianProcessTypePointer gp(new GaussianProcessType(wk));
-        gp->Load(gp_prefix);
+        gp->Load(gpr_prefix);
 
-        std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::flush;
-        //        TestVectorType test_vectors = GetTestData(input_filename);
-        //        TestVectorType test_vectors = GetTestDataITK(input_dir);
-        DataParserTypePointer parser(new DataParserType(input_dir, ground_truth_dir, ar_folder, gp_prefix, n_inputModes, n_outputModes, use_precomputed, use_test_data));
+        std::cout << "[done]" << std::endl << "Parse data and extract PCA features... " << std::endl;
+        DataParserTypePointer parser(new DataParserType(input_folder, groundtruth_folder, gpr_prefix, config_model, config_predict));
         TestVectorType test_vectors = parser->GetTestData();
         std::cout << "[done]" << std::endl;
 
@@ -272,12 +160,10 @@ int main (int argc, char *argv[]){
             std::cout << "GP prediction done in " << elapsed_seconds.count() << "s" << std::endl;
         }
 
-//        std::cout << predicted_features.size() << std::endl;
-//        SavePrediction(predicted_features, output_dir, reference);
         // Perform PCA-1
         TestVectorType output_vectors = parser->GetResults(predicted_features);
-        SavePrediction(output_vectors, output_dir, reference);
-        WriteConfidenceToFile(gp_prefix + "-credibleInterval.csv", confidence);
+        SavePrediction(output_vectors, result_folder, reference);
+        WriteConfidenceToFile(gpr_prefix + "-credibleInterval.csv", confidence);
     }
     catch(std::string &s){
         std::cout << "Error: " << s << std::endl;

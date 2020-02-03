@@ -7,8 +7,8 @@ ADD_EXECUTABLE(gpPredict ${gpp_app_src})
 #TARGET_LINK_LIBRARIES( gpLearn gplib)
 #TARGET_LINK_LIBRARIES( gpPredict gplib)
 
-TARGET_LINK_LIBRARIES( gpLearn gplib stdc++fs)
-TARGET_LINK_LIBRARIES( gpPredict gplib stdc++fs)
+TARGET_LINK_LIBRARIES( gpLearn nlohmann_json::nlohmann_json gplib stdc++fs)
+TARGET_LINK_LIBRARIES( gpPredict nlohmann_json::nlohmann_json gplib stdc++fs)
 
 SET_TARGET_PROPERTIES(gpLearn PROPERTIES OUTPUT_NAME gpLearn)
 SET_TARGET_PROPERTIES(gpPredict PROPERTIES OUTPUT_NAME gpPredict)

@@ -182,39 +182,6 @@ public:
         return YPred;
     }
 
-    bool AutoRegressionTest()
-    {
-        int nBatchTypes = 2;
-        int batchSize[nBatchTypes] = {2, 4};
-        int batchRepetition[nBatchTypes] = {1, 1};
-        MatrixType X(6,2);
-        X << 1, 2, 3, 4, 5, 6,
-             10, 20, 30, 40, 50, 60;
-        MatrixType X_test(6,2);
-        X_test << 7, 8, 9, 10, 11, 12,
-                  70, 80, 90, 100, 110, 120;
-
-        std::cout << "Compute model 1" << std::endl;
-        ComputeModel(X, nBatchTypes, batchSize, batchRepetition, true);
-        std::cout << "Predict model 1" << std::endl;
-        MatrixType YPred1 = Predict(X_test, nBatchTypes, batchSize, batchRepetition, true);
-        std::cout << "theta:\n" << m_theta << std::endl;
-        std::cout << "YPred:\n" << YPred1 << std::endl;
-
-        std::cout << "Compute model 2" << std::endl;
-        ComputeModel(X);
-        std::cout << "Predict model 2" << std::endl;
-        MatrixType YPred2 = Predict(X_test, true);
-        std::cout << "theta:\n" << m_theta << std::endl;
-        std::cout << "YPred:\n" << YPred2 << std::endl;
-
-        WriteModelParametersToFile("/tmp/test_theta.txt");
-        ReadModelParametersFromFile("/tmp/test_theta.txt");
-        std::cout << "theta:\n" << m_theta << std::endl;
-
-        return true;
-    }
-
 protected:
     MatrixType ComputeSubmatrix(VectorType& X)
     {
