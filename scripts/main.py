@@ -6,29 +6,26 @@ from shutil import copyfile
 import argparse
 from argparse import Namespace
 import yaml
+import json
 
 import numpy as np
 import SimpleITK as sitk
 
 from data.dicom_loader import DicomLoader
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--config', help='path to config.yaml file', type=str, default='./params/config.yaml')
-args = parser.parse_args()
-
 
 def pairwise_registration(dirs, par_list, master, refs, exe):
     reg_dir = dirs['registration_dir']
-    # warped_dir = dirs['warped_dir']
+    warped_dir = dirs['warped_dir']
     dfs_dir = dirs['dfs_dir']
 
     par_list.append('-t ' + master)
     par_list.append('-o ' + reg_dir)
 
     # Pairwise registration
-    # if os.path.isdir(warped_dir):
-    #     shutil.rmtree(warped_dir)
-    # os.makedirs(warped_dir, exist_ok=True)
+    if os.path.isdir(warped_dir):
+        shutil.rmtree(warped_dir)
+    os.makedirs(warped_dir, exist_ok=True)
 
     if os.path.isdir(dfs_dir):
         shutil.rmtree(dfs_dir)
@@ -44,20 +41,20 @@ def pairwise_registration(dirs, par_list, master, refs, exe):
 
         # save registration result
         result_dir = os.path.join(reg_dir, "vtk")
-        # warped = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("warpedImage_")])
-        # warped_copy = os.path.join(warped_dir, ("warpedImg%05d.vtk" % itr))
-        # copyfile(warped[-1], warped_copy)
+        warped = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("warpedImage_")])
+        warped_copy = os.path.join(warped_dir, ("warpedImg%05d.vtk" % itr))
+        copyfile(warped[-1], warped_copy)
 
         df = sorted([os.path.join(result_dir, i) for i in os.listdir(result_dir) if i.startswith("displacement_")])
         df_copy = os.path.join(dfs_dir, ("dfReg%05d.vtk" % itr))
         copyfile(df[-1], df_copy)
 
 
-if __name__ == "__main__":
+def main(config):
     # ----------------------------------------------------------
     # Load configuration parameters
     # ----------------------------------------------------------
-    with open(args.config, 'r') as config_stream:
+    with open(config, 'r') as config_stream:
         cfg = yaml.safe_load(config_stream)
 
     opt = Namespace(**cfg['options'])
@@ -65,7 +62,8 @@ if __name__ == "__main__":
     cfg_general = Namespace(**cfg['general'])
     cfg_reg2d = cfg['reg2d']
     cfg_reg3d = cfg['reg3d']
-    cfg_gpr = Namespace(**cfg['gpr'])
+    cfg_gpr_model = Namespace(**cfg['gpr_model'])
+    cfg_gpr_learn = Namespace(**cfg['gpr_learn'])
 
     # ----------------------------------------------------------
     # Preprocessing
@@ -153,7 +151,6 @@ if __name__ == "__main__":
     else:
         try:
             surrogate_dir = os.path.join(cfg_general.root_dir, cfg_general.input_dir)
-            print(surrogate_dir)
         except:
             sys.exit('Surrogate not correctly defined')
 
@@ -268,59 +265,66 @@ if __name__ == "__main__":
     # ----------------------------------------------------------
     # GP Regression
     # ----------------------------------------------------------
-    subdir = cfg_gpr.subdir  # validation, test, (train)
-    gp_dir_pred = os.path.join(registration3d_dir, '{:s}_pred'.format(subdir))
+    # Config files
+    cfg_model = os.path.join(cfg_general.root_dir, 'config_model.json')
+    with open(cfg_model, 'w') as fp:
+        json.dump(cfg['gpr_model'], fp)
 
+    cfg_learn = os.path.join(cfg_general.root_dir, 'config_learn.json')
+    with open(cfg_learn, 'w') as fp:
+        json.dump(cfg['gpr_learn'], fp)
+
+    cfg_predict = os.path.join(cfg_general.root_dir, 'config_predict.json')
+    with open(cfg_predict, 'w') as fp:
+        json.dump(cfg['gpr_predict'], fp)
+
+    # Folder structure
+    subdir = cfg_gpr_model.subdir  # validation, test
+    gpr_dir = os.path.join(registration3d_dir, 'gpr')
+    gpr_prefix = os.path.join(gpr_dir, 'gpr')
+    gpr_result_dir = os.path.join(registration3d_dir, '{:s}_pred'.format(subdir))
+    gpr_ar_dir = os.path.join(cfg_general.root_dir, cfg_general.ar_dir)
+
+    # Perform regression
     if opt.regression:
         print('GP REGRESSION...')
-        gp_dir = os.path.join(registration3d_dir, 'gpr')
-        if os.path.isdir(gp_dir):
-            if not cfg_gpr.use_precomputed:
-                [os.remove(os.path.join(gp_dir, f)) for f in os.listdir(gp_dir)]
+        if os.path.isdir(gpr_dir):
+            if not cfg_gpr_learn.use_precomputed:
+                [os.remove(os.path.join(gpr_dir, f)) for f in os.listdir(gpr_dir)]
         else:
-            os.makedirs(gp_dir, exist_ok=True)
-        gp_dir = os.path.join(gp_dir, 'gpr')
+            # os.system('sudo mkdir {:s}'.format(gpr_dir))
+            os.makedirs(gpr_dir, exist_ok=True)
 
-        if os.path.isdir(gp_dir_pred):
-            [os.remove(os.path.join(gp_dir_pred, f)) for f in os.listdir(gp_dir_pred)]
+        if os.path.isdir(gpr_result_dir):
+            [os.remove(os.path.join(gpr_result_dir, f)) for f in os.listdir(gpr_result_dir)]
         else:
-            os.makedirs(gp_dir_pred, exist_ok=True)
+            os.makedirs(gpr_result_dir, exist_ok=True)
+            # os.system('sudo mkdir {:s}'.format(gpr_result_dir))
 
         # Learn
-        gp_learn_par_list = []
-        gp_learn_par_list.append(os.path.join(surrogate_dir, 'train'))
-        # gp_learn_par_list.append(os.path.join(reg3d_dirs['dfs_dir'], 'train'))
-        gp_learn_par_list.append(os.path.join(registration3d_dir, 'train'))
-        gp_learn_par_list.append(cfg_gpr.kernel_string)
-        gp_learn_par_list.append(str(cfg_gpr.data_noise))
-        gp_learn_par_list.append(gp_dir)
-        gp_learn_par_list.append(cfg_gpr.n_inputModes)
-        gp_learn_par_list.append(cfg_gpr.n_outputModes)
-        if cfg_gpr.use_precomputed:
-            gp_learn_par_list.append('true')
+        gpr_learn_par_list = []
+        gpr_learn_par_list.append(cfg_model)
+        gpr_learn_par_list.append(cfg_learn)
+        gpr_learn_par_list.append(gpr_prefix)
+        gpr_learn_par_list.append(os.path.join(surrogate_dir, 'train'))
+        gpr_learn_par_list.append(os.path.join(registration3d_dir, 'train'))
+        gpr_learn_par_list.append(gpr_ar_dir)
 
-        gp_learn_pars = ' '.join(gp_learn_par_list)
-        gp_learn_cmd = ' '.join([exe.regression_learn, gp_learn_pars])
-        os.system(gp_learn_cmd)
+        gpr_learn_pars = ' '.join(gpr_learn_par_list)
+        gpr_learn_cmd = ' '.join([exe.regression_learn, gpr_learn_pars])
+        os.system(gpr_learn_cmd)
 
         # Predict
-        gp_predict_par_list = []
-        gp_predict_par_list.append(gp_dir)
-        gp_predict_par_list.append(os.path.join(surrogate_dir, subdir))
-        # gp_predict_par_list.append(os.path.join(surrogate_dir, 'train'))
-        gp_predict_par_list.append(gp_dir_pred)
-        gp_predict_par_list.append(os.path.join(registration3d_dir, subdir))
-        # gp_predict_par_list.append(os.path.join(stack_dir, cfg_general.master_volume))
-        gp_predict_par_list.append(os.path.join(cfg_general.root_dir, cfg_general.master_volume))
-        gp_predict_par_list.append(cfg_gpr.n_inputModes)
-        gp_predict_par_list.append(cfg_gpr.n_outputModes)
-        if subdir == 'test':
-            gp_predict_par_list.append('false')  # use_precomputed
-            gp_predict_par_list.append('test')
-        elif cfg_gpr.use_precomputed_features:
-            gp_predict_par_list.append('true')  # use_precomputed_features
+        gpr_predict_par_list = []
+        gpr_predict_par_list.append(cfg_model)
+        gpr_predict_par_list.append(cfg_predict)
+        gpr_predict_par_list.append(gpr_prefix)
+        gpr_predict_par_list.append(os.path.join(surrogate_dir, subdir))
+        gpr_predict_par_list.append(os.path.join(registration3d_dir, subdir))
+        gpr_predict_par_list.append(gpr_result_dir)
+        gpr_predict_par_list.append(os.path.join(cfg_general.root_dir, cfg_general.master_volume))
 
-        gp_predict_pars = ' '.join(gp_predict_par_list)
+        gp_predict_pars = ' '.join(gpr_predict_par_list)
         gp_predict_cmd = ' '.join([exe.regression_predict, gp_predict_pars])
         os.system(gp_predict_cmd)
         print('[done]')
@@ -328,38 +332,48 @@ if __name__ == "__main__":
     # ----------------------------------------------------------
     # Evaluation
     # ----------------------------------------------------------
-    result_dir = os.path.join(registration3d_dir, '{:s}_diff'.format(subdir))
+    diff_dir = os.path.join(registration3d_dir, '{:s}_diff'.format(subdir))
     if opt.evaluation:
         print('EVALUATION...')
-        if os.path.isdir(result_dir):
-            [os.remove(os.path.join(result_dir, f)) for f in os.listdir(result_dir)]
+        if os.path.isdir(diff_dir):
+            [os.remove(os.path.join(diff_dir, f)) for f in os.listdir(diff_dir)]
         else:
-            os.makedirs(result_dir, exist_ok=True)
+            os.makedirs(diff_dir, exist_ok=True)
 
         # Compute difference between ground-truth and gpr prediction
-        # dfs_test_dir = os.path.join(reg3d_dirs['dfs_dir'], subdir)
-        dfs_test_dir = os.path.join(registration3d_dir, subdir)
-        # dfs_test_dir = os.path.join(reg3d_dirs['dfs_dir'], 'train')
+        if cfg_general.eval_warped:
+            dfs_test_dir = os.path.join(reg3d_dirs['dfs_dir'], subdir)
+            warped_test_dir = os.path.join(reg3d_dirs['warped_dir'], subdir)
+
+            warped_true = sorted([os.path.join(warped_test_dir, i) for i in os.listdir(warped_test_dir)
+                                  if i.endswith(cfg_general.output_format)])
+            warped_pred = sorted([os.path.join(gpr_result_dir, i) for i in os.listdir(gpr_result_dir) if i.startswith('warpedImg')])
+
+            stacks_true = sorted([os.path.join(stack_dir, i) for i in os.listdir(stack_dir)
+                                  if i.startswith('vol')])
+        else:
+            dfs_test_dir = os.path.join(registration3d_dir, subdir)
+
         dfs_true = sorted([os.path.join(dfs_test_dir, i) for i in os.listdir(dfs_test_dir)
                            if i.endswith(cfg_general.output_format)])
-        # warped_test_dir = os.path.join(reg3d_dirs['warped_dir'], 'test')
-        # warped_test_dir = os.path.join(reg3d_dirs['warped_dir'], 'train')
-        # warped_true = sorted([os.path.join(warped_test_dir, i) for i in os.listdir(warped_test_dir)
-        #                       if i.endswith(cfg_general.output_format)])
-        # stacks_true = sorted([os.path.join(stack_dir, i) for i in os.listdir(stack_dir) if i.startswith('vol')])
-
-        dfs_pred = sorted([os.path.join(gp_dir_pred, i) for i in os.listdir(gp_dir_pred) if i.startswith('dfPred')])
-        # warped_pred = sorted([os.path.join(gp_dir_pred, i) for i in os.listdir(gp_dir_pred) if i.startswith('warpedImg')])
+        dfs_pred = sorted([os.path.join(gpr_result_dir, i) for i in os.listdir(gpr_result_dir)
+                           if i.startswith('dfPred')])
 
         for itr in range(0, len(dfs_true)):
             # read images
-            sitk_imgs = {
-                # 'stack_true': sitk.ReadImage(stacks_true[itr]),
-                # 'warped_true': sitk.ReadImage(warped_true[itr]),
-                # 'warped_pred': sitk.ReadImage(warped_pred[itr]),
-                'df_true': sitk.ReadImage(dfs_true[itr]),
-                'df_pred': sitk.ReadImage(dfs_pred[itr])
-            }
+            if cfg_general.eval_warped:
+                sitk_imgs = {
+                    'stack_true': sitk.ReadImage(stacks_true[itr]),
+                    'warped_true': sitk.ReadImage(warped_true[itr]),
+                    'warped_pred': sitk.ReadImage(warped_pred[itr]),
+                    'df_true': sitk.ReadImage(dfs_true[itr]),
+                    'df_pred': sitk.ReadImage(dfs_pred[itr])
+                }
+            else:
+                sitk_imgs = {
+                    'df_true': sitk.ReadImage(dfs_true[itr]),
+                    'df_pred': sitk.ReadImage(dfs_pred[itr])
+                }
 
             # Convert sitk to np
             np_imgs = {}
@@ -367,11 +381,16 @@ if __name__ == "__main__":
                 np_imgs[name] = sitk.GetArrayFromImage(img)
 
             # Qualitative comparison
-            np_diff = {
-                # 'stack': np.absolute(np_imgs['stack_true'] - np_imgs['warped_pred']),
-                # 'warped': np.absolute(np_imgs['warped_true']*4095 - np_imgs['warped_pred']),
-                'df': np_imgs['df_true'] - np_imgs['df_pred']
-            }
+            if cfg_general.eval_warped:
+                np_diff = {
+                    'stack': np.absolute(np_imgs['stack_true'] - np_imgs['warped_pred']),
+                    'warped': np.absolute(np_imgs['warped_true']*4095 - np_imgs['warped_pred']),
+                    'df': np_imgs['df_true'] - np_imgs['df_pred']
+                }
+            else:
+                np_diff = {
+                    'df': np_imgs['df_true'] - np_imgs['df_pred']
+                }
 
             sitk_diff = {}
             for name, img in np_diff.items():
@@ -381,6 +400,14 @@ if __name__ == "__main__":
                 diff.SetOrigin(sitk_imgs[name + '_true'].GetOrigin())
 
                 sitk_diff[name] = diff
-                sitk.WriteImage(diff, os.path.join(result_dir, ('diff_' + name + '%05d.vtk' % itr)))
+                sitk.WriteImage(diff, os.path.join(diff_dir, ('diff_' + name + '%05d.vtk' % itr)))
 
         print('[done]')
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', help='path to config.yaml file', type=str, default='./params/config.yaml')
+    args = parser.parse_args()
+
+    main(args.config)

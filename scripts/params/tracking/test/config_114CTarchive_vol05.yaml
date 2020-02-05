@@ -1,0 +1,73 @@
+# Options
+options:
+   preprocessing: False
+   registration_2d: False
+   stacking: False
+   registration_3d: False
+   splitting_data: False
+   regression: True
+   evaluation: True
+
+# Executables
+exe:
+   stacking: '/home/alina/Projects/ImageStacking4dMRI/build/ims4dMRI'
+   registration_2d: '/home/alina/Projects/GraphDemons_3D/build_2d/gdr'
+   registration_3d: '/home/alina/Projects/GraphDemons_3D/build_3d/gdr'
+   regression_learn: '/home/alina/Projects/GPR/build/apps/gpLearn'
+   regression_predict: '/home/alina/Projects/GPR/build/apps/gpPredict'
+
+# General configuration
+general:
+   surrogate_type: -1 #  0 - MR navigators, 1 - ultrasound
+   root_dir: '/media/WDportable/MotionModelling_Tracking/114CTarchive_vol05'
+   input_dir: 'pairs/US'
+   output_dir: 'pairs/CT'
+   ar_dir: 'pairs/AR'
+   data_dir: ''
+   navi_dir: ''
+   us_dir: ''
+   n_slices: 0
+   n_sweeps: 0
+   n_training_sweeps: 0
+   master_navi: ''
+   master_volume: 'pairs/CT/train/deformationfield_0181.mha'
+   input_format: 'png'
+   output_format: 'mha'
+   eval_warped: False
+
+# 2D Registration (for navis only)
+reg2d:
+  - ''
+
+# 3D Registration
+reg3d:
+   - ''
+
+# Gaussian Processes Regression (GPR)
+# Note: If you run GPR for test set, the features are overwritten and have to be recomputed for the validation set.
+gpr_model:
+   subdir: 'validation' # subdirectory used for prediction: validation or test
+   kernel_string: 'GaussianKernel(35, 30,)'
+   data_noise: 1.0
+   n_inputModes: 197
+   n_outputModes: 5
+   perform_ar: true # Perform Autoregression on input data
+   ar_n: 2 # n-step ahead prediction
+   ar_p: 5 # order of AR model
+
+gpr_learn:
+   use_precomputed: true
+   ar_onePredictionPerBatch: true
+   ar_batchSizeTrain: [75]
+   ar_batchRepetitionTrain: [8]
+   ar_batchSizePredict: [75]
+   ar_batchRepetitionPredict: [2]
+   start_trainInd: 0 # for drift analysis
+   n_trainImgs: 0 # for drift analysis
+
+gpr_predict:
+   use_precomputed: false
+   compute_groundtruth_features: false # true for validation data, false for test data
+   ar_onePredictionPerBatch: true
+   ar_batchSizePredict: [5]
+   ar_batchRepetitionPredict: [270]
