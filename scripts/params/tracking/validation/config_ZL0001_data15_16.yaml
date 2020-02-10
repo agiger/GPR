@@ -49,25 +49,28 @@ gpr_model:
    subdir: 'validation' # subdirectory used for prediction: validation or test
    kernel_string: 'GaussianKernel(35, 30,)'
    data_noise: 1.0
-   n_inputModes: 116
-   n_outputModes: 14
+   n_inputModes: 14
+   n_outputModes: 100
    perform_ar: true # Perform Autoregression on input data
    ar_n: 2 # n-step ahead prediction
    ar_p: 5 # order of AR model
 
 gpr_learn:
    use_precomputed: false
+   ar_batchSize: [5]
+   ar_batchRepetition: [659]
    ar_onePredictionPerBatch: true
-   ar_batchSizeTrain: [5]
-   ar_batchRepetitionTrain: [15]
-   ar_batchSizePredict: [5]
-   ar_batchRepetitionPredict: [1]
+   ar_batchSizeTrain: [280]
+   ar_batchRepetitionTrain: [1]
+   ar_batchSizeTest: [20]
+   ar_batchRepetitionTest: [1]
+   ar_onePredictionPerBatchTest: false
    start_trainInd: 0 # for drift analysis
    n_trainImgs: 0 # for drift analysis
 
 gpr_predict:
    use_precomputed: false
    compute_groundtruth_features: true # true for validation data, false for test data
+   ar_batchSize: [5]
+   ar_batchRepetition: [50]
    ar_onePredictionPerBatch: true
-   ar_batchSizePredict: [5]
-   ar_batchRepetitionPredict: [50]

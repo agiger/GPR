@@ -22,15 +22,19 @@ get_pairs_stacking: 'extractCorrespondingUSImagesTracking'
 matlab_params:
   n: 2  # n-step ahead predictions using autoregression (set to 0 if no autoregression)
   p: 5  # order of autoregressive model (set to 1 if no autoregression)
+  N_ar: 25 # Image pairs used for training the AR model
   us_framerate: 15
   crop_us_roi: 1  #
   adjust_us_intensity: 1
 
+# How to compute N_us = nTrainAR + nTestAR:
+# with N_ar = 25, f_mr = 1.25 and f_us = 15, we get
+# t_ar = N_ar/f_mr = 20s -> N_us = f_us * t_ar = 300
 datasets:
   114CTarchive_data15_16:  # in number of image pairs
-    nTrainAR: 75
-    nTestAR: 5
-    nTrain: 490
+    nTrainAR: 280
+    nTestAR: 20
+    nTrain: 546
     nVal: 50
     nTest: 146
     offset: 0
@@ -39,9 +43,9 @@ datasets:
     ct_filename: 'deformationfield_{:03d}.mha'
     us_filename: 'us_{:02d}_{:05d}.png'
   114CTarchive_EK-194-18:  # in number of image pairs
-    nTrainAR: 75
-    nTestAR: 5
-    nTrain: 426
+    nTrainAR: 280
+    nTestAR: 20
+    nTrain: 482
     nVal: 50
     nTest: 146
     offset: 0
@@ -83,9 +87,9 @@ datasets:
     ct_filename: 'deformationfield_{:04d}.mha'
     us_filename: 'us_{:06d}.png'
   ZL0001_data15_16:  # in number of image pairs
-    nTrainAR: 75
-    nTestAR: 5
-    nTrain: 603
+    nTrainAR: 280
+    nTestAR: 20
+    nTrain: 659
     nVal: 50
     nTest: 33
     offset: 0
@@ -94,9 +98,9 @@ datasets:
     ct_filename: 'deformationfield_{:03d}.mha'
     us_filename: 'us_{:02d}_{:05d}.png'
   ZL0001_EK-194-18:  # in number of image pairs
-    nTrainAR: 75
-    nTestAR: 5
-    nTrain: 539
+    nTrainAR: 280
+    nTestAR: 20
+    nTrain: 595
     nVal: 50
     nTest: 33
     offset: 0

@@ -35,7 +35,7 @@ public:
 
     void ReadModelParametersFromFile(std::string filename)
     {
-       m_theta = gpr::ReadMatrix<MatrixType>(filename);
+        m_theta = gpr::ReadMatrix<MatrixType>(filename);
     };
 
     void WriteModelParametersToFile(std::string filename)
@@ -43,7 +43,10 @@ public:
         gpr::WriteMatrix<MatrixType>(m_theta, filename);
     };
 
-
+    MatrixType GetModelParameters()
+    {
+        return m_theta;
+    }
 
     void ComputeModel(MatrixType& X, int nBatchTypes=0, int* batchSize=NULL, int* batchRepetition=NULL, bool verbose=false)
     {
@@ -107,7 +110,7 @@ public:
     }
 
     MatrixType Predict(MatrixType& X, int nBatchTypes=0, int* batchSize=NULL, int* batchRepetition=NULL,
-            bool onePredictionPerBatch = false, bool verbose=false)
+                       bool onePredictionPerBatch = false, bool verbose=false)
     {
         // Initialise data
         int nSamples = 0;

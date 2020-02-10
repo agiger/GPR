@@ -76,10 +76,6 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
         ar_dirs = [ar_train_dir, ar_test_dir]
         empty_dir(ar_train_dir)
         empty_dir(ar_test_dir)
-        # Move files from AR to US folder
-        files = [os.path.join(ar_dir, f) for f in os.listdir(ar_dir) if f.endswith('png')]
-        for f in files:
-            shutil.move(f, us_dir)
 
     # Create US/CT pairs according to list
     file = os.path.join(pairs_dir, 'pairs.csv')
@@ -93,26 +89,20 @@ def create_pairs(root, split, split_factor, offset=0, mode=1, ar=False,
         assert len(split) == 5, 'split indices not correctly defined for AR'
         split_ar = split[:2]
         split = split[2:]
-        if mode == 1:
-            assert pairs_ind.shape[0] % (sum(split) + sum(split_ar) + offset) == 0, 'split indices do not fit dataset'
-            p = int(pairs_ind.shape[0]/(sum(split) + sum(split_ar) + offset))  # Order of AR model if any
-        elif mode == 2:
-            assert pairs_ind.shape[0] % (sum(split) + offset) == 0, 'split indices do not fit dataset'
-            p = int(pairs_ind.shape[0]/(sum(split) + offset))  # Order of AR model if any
+        assert pairs_ind.shape[0] % (sum(split) + offset) == 0, 'split indices ({:d}) do not fit dataset ({:d})'.format(sum(split)+offset, pairs_ind.shape[0])
+        p = int(pairs_ind.shape[0]/(sum(split) + offset))  # Order of AR model if any
     print(split_ar, split)
+
+    if ar and mode == 1:  # For stacking: copy US files to AR folders
+        files = sorted([os.path.join(ar_dir, f) for f in os.listdir(ar_dir) if f.endswith('.png')])
+        for itr_ar_files, file in enumerate(files):
+            if itr_ar_files < split_ar[0]:
+                shutil.move(file, ar_dirs[0])
+            elif itr_ar_files < split_ar[0] + split_ar[1]:
+                shutil.move(file, ar_dirs[1])
 
     start_ind = offset
     print(start_ind)
-    if ar and mode == 1:  # For stacking: copy US files to AR folders
-        for itr_ar_set in range(len(split_ar)):
-            for itr_ar_file in range(split_ar[itr_ar_set]*p):
-                file_ind = start_ind + itr_ar_file
-                fname = get_us_filename(pairs_ind, file_ind, mode, us_filename)
-                us_file = os.path.join(us_dir, fname)
-                shutil.move(us_file, ar_dirs[itr_ar_set])
-            start_ind += split_ar[itr_ar_set]*p
-            print(start_ind)
-
     assert len(split) == 3, 'split indices not correctly defined for US'
     for itr_set in range(len(split)):
         for itr_file in range(split[itr_set]*p):

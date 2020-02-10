@@ -55,26 +55,36 @@ public:
         m_performAr = config_model["perform_ar"].get<bool>();
         m_usePrecomputed = config_learn["use_precomputed"].get<bool>();
         m_computeGtFeatures = false;
-        m_useOnePredictionPerBatch = config_learn["ar_onePredictionPerBatch"].get<bool>();
 
         // Model parameters
         m_numberOfPrincipalModesInput = config_model["n_inputModes"].get<int>();
         m_numberOfPrincipalModesOutput= config_model["n_outputModes"].get<int>();
         m_n = config_model["ar_n"].get<int>();
         m_p = config_model["ar_p"].get<int>();
-        std::vector<int> m_batchSizeTrain = config_learn["ar_batchSizeTrain"].get<std::vector<int>>();
-        std::vector<int> m_batchRepetitionTrain = config_learn["ar_batchRepetitionTrain"].get<std::vector<int>>();
-        std::vector<int> m_batchSizePredict = config_learn["ar_batchSizePredict"].get<std::vector<int>>();
-        std::vector<int> m_batchRepetitionPredict = config_learn["ar_batchRepetitionPredict"].get<std::vector<int>>();
+
+        // AR: train & test AR model
+        m_batchSizeTrain = config_learn["ar_batchSizeTrain"].get<std::vector<int>>();
+        m_batchRepetitionTrain = config_learn["ar_batchRepetitionTrain"].get<std::vector<int>>();
         m_nBatchTypesTrain = m_batchSizeTrain.size();
-        m_nBatchTypesPredict = m_batchSizePredict.size();
+
+        m_batchSizeTest = config_learn["ar_batchSizeTest"].get<std::vector<int>>();
+        m_batchRepetitionTest = config_learn["ar_batchRepetitionTest"].get<std::vector<int>>();
+        m_nBatchTypesTest = m_batchSizeTest.size();
+        m_onePredictionPerBatchTest = config_learn["ar_onePredictionPerBatchTest"].get<bool>();
+
+        // AR: apply model to training data for motion prediction
+        m_batchSize = config_learn["ar_batchSize"].get<std::vector<int>>();
+        m_batchRepetition = config_learn["ar_batchRepetition"].get<std::vector<int>>();
+        m_nBatchTypes = m_batchSize.size();
+        m_onePredictionPerBatch = config_learn["ar_onePredictionPerBatch"].get<bool>();
 
         if (m_performAr){
             if (m_batchSizeTrain.size() != m_batchRepetitionTrain.size() ||
-                m_batchSizePredict.size() != m_batchRepetitionPredict.size()){
+                m_batchSizeTest.size() != m_batchRepetitionTest.size() ||
+                m_batchSize.size() != m_batchRepetition.size()){
                 throw std::invalid_argument("AR parameters not correctly defined!");
             }
-            if(m_batchSizeTrain.empty() || m_batchSizePredict.empty()){
+            if(m_batchSizeTrain.empty() || m_batchSizeTest.empty() || m_batchSize.empty()){
                 throw std::invalid_argument("AR parameters empty!");
             }
         }
@@ -130,22 +140,22 @@ public:
         m_performAr = config_model["perform_ar"].get<bool>();
         m_usePrecomputed = config_predict["use_precomputed"].get<bool>();
         m_computeGtFeatures = config_predict["compute_groundtruth_features"].get<bool>();
-        m_useOnePredictionPerBatch = config_predict["ar_onePredictionPerBatch"].get<bool>();
 
         // Model parameters
         m_numberOfPrincipalModesInput = config_model["n_inputModes"].get<int>();
         m_numberOfPrincipalModesOutput= config_model["n_outputModes"].get<int>();
         m_n = config_model["ar_n"].get<int>();
         m_p = config_model["ar_p"].get<int>();
-        m_batchSizePredict = config_predict["ar_batchSizePredict"].get<std::vector<int>>();
-        m_batchRepetitionPredict = config_predict["ar_batchRepetitionPredict"].get<std::vector<int>>();
-        m_nBatchTypesPredict = m_batchSizePredict.size();
+        m_batchSize = config_predict["ar_batchSize"].get<std::vector<int>>();
+        m_batchRepetition = config_predict["ar_batchRepetition"].get<std::vector<int>>();
+        m_nBatchTypes = m_batchSize.size();
+        m_onePredictionPerBatch = config_predict["ar_onePredictionPerBatch"].get<bool>();
 
         if (m_performAr){
-            if (m_batchSizePredict.size() != m_batchRepetitionPredict.size()){
+            if (m_batchSize.size() != m_batchRepetition.size()){
                 throw std::invalid_argument("AR parameters not correctly defined!");
             }
-            if(m_batchSizePredict.empty()){
+            if(m_batchSize.empty()){
                 throw std::invalid_argument("AR parameters empty!");
             }
         }
@@ -174,7 +184,6 @@ public:
     {
         PcaFeatureExtractionForPrediction();
         std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
-        std::cout << "outputFeatures: " << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
         CreateTestVector();
         return m_testVector;
     }
@@ -202,18 +211,26 @@ protected:
         // Save mean and basis as images
         VectorType mean = pca.GetMean();
         MatrixType basis = pca.GetBasis(nModes);
-        WriteVectorToImage(mean, reference, prefix + "Mean.vtk");
-        WriteMatrixToImageSeries(basis, reference, prefix);
+        if(prefix.compare(m_gprPrefixInput) == 0) {
+            WriteVectorToImage(mean, reference, prefix + "Mean.vtk");
+            WriteMatrixToImageSeries(basis, reference, prefix);
+        }
+        else if (prefix.compare(m_gprPrefixOutput) == 0){
+            WriteVectorToDisplacement(mean, reference, prefix + "Mean.vtk");
+            WriteMatrixToDisplacementSeries(basis, reference, prefix);
+        }
 
         // Explained Variance
         VectorType explainedVar= pca.GetExplainedVariance();
-        gpr::WriteMatrix<MatrixType>(explainedVar, prefix + "Compactness.bin");
+//        gpr::WriteMatrix<MatrixType>(explainedVar, prefix + "Compactness.bin");
+        WriteToCsvFile(prefix + "Compactness.csv", explainedVar);
 
         // Write files
         pca.WriteMatricesToFile(prefix);
 
         MatrixType fullFeatures = pca.DimensionalityReduction(matrix);
-        gpr::WriteMatrix<MatrixType>(fullFeatures, prefix + "Features.bin");
+//        gpr::WriteMatrix<MatrixType>(fullFeatures, prefix + "Features.bin");
+        WriteToCsvFile(prefix + "Features.csv", fullFeatures);
 
         std::cout << "Basis: " << basis.rows() << "x" << basis.cols() << std::endl;
         std::cout << "Features: " << features.rows() << "x" << features.cols() << std::endl;
@@ -232,7 +249,7 @@ protected:
             }
 
             ComputeFeaturesForTraining(m_outputFeatures, m_outputMatrix, m_numberOfPrincipalModesOutput, m_gprPrefixOutput, m_outputFiles.front());
-            if(m_performAr){
+            if(!m_performAr){
                 ComputeFeaturesForTraining(m_inputFeatures, m_inputMatrix, m_numberOfPrincipalModesInput, m_gprPrefixInput, m_inputFiles.front());
             }
             else{
@@ -263,33 +280,40 @@ protected:
                 AutoRegressionType ar(m_n, m_p);
                 ar.ComputeModel(arFeaturesTrainTranspose, m_nBatchTypesTrain, &m_batchSizeTrain[0], &m_batchRepetitionTrain[0]);
                 ar.WriteModelParametersToFile(m_gprPrefix + "-arModel.bin");
-                m_inputFeatures = ar.Predict(inputFeaturesTranspose).transpose();
-                MatrixType arFeaturesTestPredictTranspose = ar.Predict(arFeaturesTestTranspose, m_nBatchTypesPredict, &m_batchSizePredict[0], &m_batchRepetitionPredict[0], m_useOnePredictionPerBatch);
+                MatrixType arFeaturesTestPredictTranspose = ar.Predict(arFeaturesTestTranspose, m_nBatchTypesTest, &m_batchSizeTest[0], &m_batchRepetitionTest[0], m_onePredictionPerBatchTest);
+                MatrixType theta = ar.GetModelParameters();
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypes, &m_batchSize[0], &m_batchRepetition[0], m_onePredictionPerBatch).transpose();
 
-                gpr::WriteMatrix<MatrixType>(arFeaturesTestTranspose, m_gprPrefix + "-arFeaturesTest.bin");
-                gpr::WriteMatrix<MatrixType>(arFeaturesTestPredictTranspose, m_gprPrefix + "-arFeaturesTestPredict.bin");
+//                gpr::WriteMatrix<MatrixType>(arFeaturesTestTranspose, m_gprPrefix + "-arFeaturesTest.bin");
+//                gpr::WriteMatrix<MatrixType>(arFeaturesTestPredictTranspose, m_gprPrefix + "-arFeaturesTestPredict.bin");
+                WriteToCsvFile(m_gprPrefix + "-arFeaturesTest.csv", arFeaturesTestTranspose);
+                WriteToCsvFile(m_gprPrefix + "-arFeaturesTestPredict.csv", arFeaturesTestPredictTranspose);
+                WriteToCsvFile(m_gprPrefix + "-arModel.csv", theta);
             }
         }
         else
         {
             // Read output features
-            MatrixType fullOutputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixOutput + "Features.bin");
+//            MatrixType fullOutputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixOutput + "Features.bin");
+            MatrixType fullOutputFeatures = ReadFromCsvFile(m_gprPrefixOutput + "Features.csv");
             m_outputFeatures = fullOutputFeatures.topRows(m_numberOfPrincipalModesOutput);
 
-            if(m_performAr){
+            if(!m_performAr){
                 // Read input features
-                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixInput + "Features.bin");
+//                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixInput + "Features.bin");
+                MatrixType fullInputFeatures = ReadFromCsvFile(m_gprPrefixInput + "Features.csv");
                 m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
             }
             else{
-                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixInput + "Features.bin");
+//                MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_gprPrefixInput + "Features.bin");
+                MatrixType fullInputFeatures = ReadFromCsvFile(m_gprPrefixInput + "Features.csv");
                 MatrixType concatInputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
                 MatrixType inputFeaturesTranspose = concatInputFeatures.leftCols(m_inputFiles.size()).transpose();
 
                 // Autoregression: predict input features
                 AutoRegressionType ar(m_n, m_p);
                 ar.ReadModelParametersFromFile(m_gprPrefix + "-arModel.bin");
-                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypesPredict, &m_batchSizePredict[0], &m_batchRepetitionPredict[0], m_useOnePredictionPerBatch).transpose();
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypes, &m_batchSize[0], &m_batchRepetition[0], m_onePredictionPerBatch).transpose();
             }
         }
 
@@ -305,9 +329,10 @@ protected:
             PcaType inputPca(m_gprPrefixInput);
 
             MatrixType fullInputFeatures = inputPca.DimensionalityReduction(m_inputMatrix);
-            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeaturesForPrediction);
+//            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeaturesForPrediction);
+            WriteToCsvFile(m_pathInputFeaturesForPrediction, fullInputFeatures);
 
-            if(m_performAr){
+            if(!m_performAr){
                 m_inputFeatures = inputPca.DimensionalityReduction(m_inputMatrix, m_numberOfPrincipalModesInput);
             }
             else{
@@ -316,13 +341,15 @@ protected:
                 // Autoregression: predict input features
                 AutoRegressionType ar(m_n, m_p);
                 ar.ReadModelParametersFromFile(m_gprPrefix + "-arModel.bin");
-                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypesPredict, &m_batchSizePredict[0], &m_batchRepetitionPredict[0], m_useOnePredictionPerBatch).transpose();
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypes, &m_batchSize[0], &m_batchRepetition[0], m_onePredictionPerBatch).transpose();
             }
         }
         else
         {
-            MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_pathInputFeaturesForPrediction);
-            if(m_performAr){
+//            MatrixType fullInputFeatures = gpr::ReadMatrix<MatrixType>(m_pathInputFeaturesForPrediction);
+            MatrixType fullInputFeatures = ReadFromCsvFile(m_pathInputFeaturesForPrediction);
+
+            if(!m_performAr){
                 m_inputFeatures = fullInputFeatures.topRows(m_numberOfPrincipalModesInput);
             }
             else{
@@ -331,7 +358,7 @@ protected:
                 // Autoregression: predict input features
                 AutoRegressionType ar(m_n, m_p);
                 ar.ReadModelParametersFromFile(m_gprPrefix + "-arModel.bin");
-                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypesPredict, &m_batchSizePredict[0], &m_batchRepetitionPredict[0], m_useOnePredictionPerBatch).transpose();
+                m_inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypes, &m_batchSize[0], &m_batchRepetition[0], m_onePredictionPerBatch).transpose();
             }
         }
 
@@ -344,7 +371,8 @@ protected:
 
             m_outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
             MatrixType m_fullOutputFeatures = outputPca.DimensionalityReduction(m_outputMatrix);
-            gpr::WriteMatrix<MatrixType>(m_fullOutputFeatures, m_pathGroundTruthFeatures);
+//            gpr::WriteMatrix<MatrixType>(m_fullOutputFeatures, m_pathGroundTruthFeatures);
+            WriteToCsvFile(m_pathGroundTruthFeatures, m_fullOutputFeatures);
         }
     }
 
@@ -358,7 +386,8 @@ protected:
             outputFeatures.col(itr) = v;
             itr++;
         }
-        gpr::WriteMatrix<MatrixType>(outputFeatures, m_pathOutputFeaturesForPrediction);
+//        gpr::WriteMatrix<MatrixType>(outputFeatures, m_pathOutputFeaturesForPrediction);
+        WriteToCsvFile(m_pathOutputFeaturesForPrediction, outputFeatures);
         PcaType outputPca(m_gprPrefixOutput);
         m_predictedOutputMatrix = outputPca.GetReconstruction(outputFeatures);
     }
@@ -565,29 +594,76 @@ protected:
         m_gprPrefixOutput = m_gprPrefix + "-output";
 
         // Training
-        m_pathInputFeatures = m_gprPrefixInput + "Features.bin";
-        m_pathOutputFeatures = m_gprPrefixOutput + "Features.bin";
+        m_pathInputFeatures = m_gprPrefixInput + "Features.csv";
+        m_pathOutputFeatures = m_gprPrefixOutput + "Features.csv";
 
         // Prediction
-        m_pathInputFeaturesForPrediction = m_gprPrefixInput + "Features_prediction.bin";
-        m_pathOutputFeaturesForPrediction = m_gprPrefixOutput + "Features_prediction.bin";
-        m_pathGroundTruthFeatures = m_gprPrefix + "-groundtruthFeatures_prediction.bin";
+        m_pathInputFeaturesForPrediction = m_gprPrefixInput + "Features_prediction.csv";
+        m_pathOutputFeaturesForPrediction = m_gprPrefixOutput + "Features_prediction.csv";
+        m_pathGroundTruthFeatures = m_gprPrefix + "-groundtruthFeatures_prediction.csv";
     }
+
+    void WriteToCsvFile(std::string filename, const MatrixType& matrix)
+    {
+        std::ofstream file;
+        file.open(filename.c_str(), std::ios::out | std::ios::trunc);
+        for(int i=0; i<matrix.rows(); ++i)
+        {
+            for(int j=0; j<matrix.cols(); ++j)
+            {
+                std::string value = std::to_string(matrix(i,j));
+                if (j == int(matrix.cols())-1)
+                {
+                    file << value;
+                }
+                else
+                {
+                    file << value << ',';
+                }
+            }
+            file << '\n';
+        }
+        file.close();
+        std::cout << filename << " has been written" << std::endl;
+    }
+
+    MatrixType ReadFromCsvFile(const std::string & path) {
+        std::ifstream indata;
+        std::string line;
+        std::vector<double> values;
+        unsigned int rows = 0;
+
+        indata.open(path);
+        while (std::getline(indata, line)) {
+            std::stringstream lineStream(line);
+            std::string cell;
+            while (std::getline(lineStream, cell, ',')) {
+                values.push_back(std::stod(cell));
+            }
+            ++rows;
+        }
+
+        unsigned int cols = values.size()/rows;
+        return Eigen::Map<MatrixType>(values.data(), rows, cols);
+    }
+
 
 private:
     // Configuration parameters
     bool m_performAr;
     bool m_usePrecomputed;
     bool m_computeGtFeatures;
-    bool m_useOnePredictionPerBatch;
+    bool m_onePredictionPerBatch;
+    bool m_onePredictionPerBatchTest;
 
     // Model parameters
     int m_numberOfPrincipalModesInput;
     int m_numberOfPrincipalModesOutput;
     int m_n, m_p;
-    int m_nBatchTypesTrain, m_nBatchTypesPredict;
+    int m_nBatchTypes, m_nBatchTypesTrain, m_nBatchTypesTest;
+    std::vector<int> m_batchSize, m_batchRepetition;
     std::vector<int> m_batchSizeTrain, m_batchRepetitionTrain;
-    std::vector<int> m_batchSizePredict, m_batchRepetitionPredict;
+    std::vector<int> m_batchSizeTest, m_batchRepetitionTest;
 
 
     // Use subset of training data only (e.g. for drift analysis)

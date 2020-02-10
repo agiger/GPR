@@ -46,28 +46,31 @@ reg3d:
 # Gaussian Processes Regression (GPR)
 # Note: If you run GPR for test set, the features are overwritten and have to be recomputed for the validation set.
 gpr_model:
-   subdir: 'validation' # subdirectory used for prediction: validation or test
+   subdir: 'test' # subdirectory used for prediction: validation or test
    kernel_string: 'GaussianKernel(35, 30,)'
    data_noise: 1.0
-   n_inputModes: 186
-   n_outputModes: 2
+   n_inputModes: 17
+   n_outputModes: 45
    perform_ar: true # Perform Autoregression on input data
    ar_n: 2 # n-step ahead prediction
    ar_p: 5 # order of AR model
 
 gpr_learn:
-   use_precomputed: false
+   use_precomputed: true
+   ar_batchSize: [5]
+   ar_batchRepetition: [520]
    ar_onePredictionPerBatch: true
-   ar_batchSizeTrain: [75]
+   ar_batchSizeTrain: [75]  # To train AR model
    ar_batchRepetitionTrain: [8]
-   ar_batchSizePredict: [75]
-   ar_batchRepetitionPredict: [2]
+   ar_batchSizeTest: [75]   # To test AR model
+   ar_batchRepetitionTest: [2]
+   ar_onePredictionPerBatchTest: false
    start_trainInd: 0 # for drift analysis
    n_trainImgs: 0 # for drift analysis
 
 gpr_predict:
    use_precomputed: false
-   compute_groundtruth_features: true # true for validation data, false for test data
+   compute_groundtruth_features: false # true for validation data, false for test data
+   ar_batchSize: [5]
+   ar_batchRepetition: [270]
    ar_onePredictionPerBatch: true
-   ar_batchSizePredict: [5]
-   ar_batchRepetitionPredict: [50]

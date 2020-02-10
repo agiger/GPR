@@ -135,12 +135,6 @@ if __name__ == "__main__":
         np.save(os.path.join(args.root, 'errbars{:s}'.format(args.suffix)), errbars)
         np.save(os.path.join(args.root, 'errbars_mean{:s}'.format(args.suffix)), mean_err)
 
-    # fig2, axs2 = plt.subplots(nrows=5, ncols=10)
-    # axs2 = axs2.ravel()
-    # for i in range(n_img):
-    #     axs2[i].hist(err_red[:, i], 50)
-    #     axs2[i].grid()
-
     color_idx = np.linspace(0, 1, len(per))
     fig2 = plt.figure(figsize=(7.5, 5))
     plt.hist(err_red.flatten(), 50)
@@ -152,60 +146,13 @@ if __name__ == "__main__":
     plt.xlabel('error (mm)')
     plt.ylabel('count')
 
-    # fig1.savefig(os.path.join('/home/alina/Desktop', 'P114_MK_time.pdf'), bbox_inches='tight')
-    # fig2.savefig(os.path.join('/home/alina/Desktop', 'P114_MK_hist.pdf'), bbox_inches='tight')
-
-    # PCA: Compactness or "Explained Variance Ratio"
+    # GPR: Credible Interval
     gpr_dir = os.path.join(args.root, 'gpr{:s}'.format(args.suffix))
-    # with open(os.path.join(gpr_dir, 'gpr-inputCompactness.csv'), 'r') as input_file:
-    #     input_cumsum = list(csv.reader(input_file))
-    # with open(os.path.join(gpr_dir, 'gpr-outputCompactness.csv'), 'r') as output_file:
-    #     output_cumsum = list(csv.reader(output_file))
-    input_cumsum = np.genfromtxt(os.path.join(gpr_dir, 'gpr-inputCompactness.csv'))
-    output_cumsum = np.genfromtxt(os.path.join(gpr_dir, 'gpr-outputCompactness.csv'))
-    derivative_in = input_cumsum[1:] - input_cumsum[:-1]
-    derivative_out = output_cumsum[1:] - output_cumsum[:-1]
-
-    input_sigma = np.genfromtxt(os.path.join(gpr_dir, 'gpr-inputSigma.csv'))
-    output_sigma = np.genfromtxt(os.path.join(gpr_dir, 'gpr-outputSigma.csv'))
-
-    n_input = next(i for i, v in enumerate(input_cumsum) if v > args.tresh)
-    n_output = next(i for i, v in enumerate(output_cumsum) if v > args.tresh)
-    print(n_input, n_output)
-
-    tot_in = sum(input_sigma)
-    var_in_exp = [(i / tot_in) for i in sorted(input_sigma, reverse=True)]
-    cum_var_in_exp = np.cumsum(var_in_exp)
-
-    tot_out = sum(output_sigma)
-    var_out_exp = [(i / tot_out) for i in sorted(output_sigma, reverse=True)]
-    cum_var_out_exp = np.cumsum(var_out_exp)
-
-    fig3 = plt.figure()
-    x = np.arange(len(input_sigma))
-    plt.subplot(2, 1, 1)
-    plt.plot(x, input_cumsum, label='from file')
-    plt.plot(x, cum_var_in_exp, label='recomputed')
-    plt.plot(x[:-1], derivative_in, label='derivative')
-    # plt.bar(x, var_in_exp, alpha=0.5, align='center', label='individual explained variance')
-    plt.grid()
-    plt.title('Input cum sum')
-    plt.legend()
-
-    x = range(len(output_sigma))
-    plt.subplot(2, 1, 2)
-    plt.plot(x, output_cumsum, label='from file')
-    plt.plot(x, cum_var_out_exp, label='recomputed')
-    plt.plot(x[:-1], derivative_out, label='derivative')
-    # plt.bar(x, var_out_exp, alpha=0.5, align='center', label='individual explained variance')
-    plt.grid()
-    plt.title('Output cum sum')
-    plt.legend()
+    credibleInterval = np.genfromtxt(os.path.join(gpr_dir, 'gpr-credibleInterval.csv'), delimiter=',')
+    credibleInterval = credibleInterval[~np.isnan(credibleInterval)]
 
     fig4 = plt.figure(figsize=(7.5, 5))
     x = range(0, err_red.shape[1])
-    credibleInterval = np.genfromtxt(os.path.join(gpr_dir, 'gpr-credibleInterval.csv'), delimiter=',')
-    credibleInterval = credibleInterval[~np.isnan(credibleInterval)]
     # plt.fill_between(x, median_err - 0.5*credibleInterval, median_err + 0.5*credibleInterval, edgecolor=(0.91, 0.95, 1), facecolor=(0.91, 0.95, 1),
     #                  label='+/- sigma')
     plt.plot(credibleInterval, label='credible interval', color='r')
@@ -217,7 +164,6 @@ if __name__ == "__main__":
     plt.xlabel('sample')
     plt.ylabel('error (mm)')
 
-    # Credible Interval
     f = 1.25  # Hz
     x_time = np.divide(x, f)
     fig5, ax5 = plt.subplots()

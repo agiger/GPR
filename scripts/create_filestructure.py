@@ -6,12 +6,9 @@ import argparse
 from data import create_CT_datasets
 from data import create_pairs
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--config', help='path to filestructure_XX.yaml file', type=str, required=True)
-args = parser.parse_args()
 
-if __name__ == "__main__":
-    with open(args.config, 'r') as config_stream:
+def configure_filestructure(config):
+    with open(config, 'r') as config_stream:
         cfg = yaml.safe_load(config_stream)
 
     opt = cfg['options']
@@ -33,10 +30,10 @@ if __name__ == "__main__":
         dest = os.path.join(cfg['dest'], 'US_data')
 
         # Run Matlab script (for stacking data)
-        matlab_cmd = cfg['get_pairs_stacking'] + "('{:s}','{:s}',{:d},{:d},{:d},{:d},{:d})".format(
+        matlab_cmd = cfg['get_pairs_stacking'] + "('{:s}','{:s}',{:d},{:d},{:d},{:d},{:d},{:d})".format(
             src, dest,
-            matlab_params['crop_us_roi'], matlab_params['adjust_us_intensity'],
-            matlab_params['n'], matlab_params['p'], matlab_params['us_framerate']
+            matlab_params['crop_us_roi'], matlab_params['adjust_us_intensity'], matlab_params['us_framerate'],
+            matlab_params['n'], matlab_params['p'], matlab_params['N_ar']
         )
         os.chdir(cfg['matlab'])
         os.system('matlab -nodisplay -nosplash -nodesktop -r "{:s};exit;"'.format(matlab_cmd))
@@ -50,10 +47,12 @@ if __name__ == "__main__":
                 ar_dest = os.path.join(cfg['dest'], data, 'pairs', 'AR')
                 if 'data15_16' in data:
                     us_src = os.path.join(dest, 'dataG15_16')
+                    ar_src = os.path.join(dest, 'dataG15', 'AR')
                     us_pairs_lst = [os.path.join(dest, f) for f in os.listdir(dest)
                                     if f.startswith('pairs_dataG15_16') and f.endswith('csv')]
                 elif 'EK-194-18' in data:
                     us_src = os.path.join(dest, 'dataG06_07')
+                    ar_src = os.path.join(dest, 'dataG06', 'AR')
                     us_pairs_lst = [os.path.join(dest, f) for f in os.listdir(dest)
                                     if f.startswith('pairs_dataG06_07') and f.endswith('csv')]
                 else:
@@ -61,10 +60,12 @@ if __name__ == "__main__":
 
                 if os.path.exists(ar_dest):
                     sh.rmtree(ar_dest)
+                sh.copytree(ar_src, ar_dest)
 
                 if os.path.exists(us_dest):
                     sh.rmtree(us_dest)
                 sh.copytree(us_src, us_dest)
+
                 pairs_dest = os.path.join(cfg['dest'], data, 'pairs')
                 sh.copy2(us_pairs_lst[0], os.path.join(pairs_dest, 'pairs.csv'))
 
@@ -104,6 +105,7 @@ if __name__ == "__main__":
     if opt['create_pairs']:
         for data in datasets:
             root = os.path.join(cfg['dest'], data)
+            print(root)
             if opt['autoregression']:
                 split = [datasets[data]['nTrainAR'], datasets[data]['nTestAR'],
                          datasets[data]['nTrain'], datasets[data]['nVal'], datasets[data]['nTest']]
@@ -118,4 +120,9 @@ if __name__ == "__main__":
             create_pairs.create_pairs(root, split, split_factor, offset, mode, opt['autoregression'], ct_filename, us_filename)
 
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', help='path to filestructure_XX.yaml file', type=str, required=True)
+    args = parser.parse_args()
 
+    configure_filestructure(args.config)
