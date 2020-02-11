@@ -5,7 +5,7 @@ options:
    stacking: False
    registration_3d: False
    splitting_data: False
-   regression: False
+   regression: True
    evaluation: True
 
 # Executables

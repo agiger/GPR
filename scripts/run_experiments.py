@@ -33,5 +33,5 @@ if __name__ == "__main__":
         for d in datasets:
             src = os.path.join(args.root, d, 'pairs', 'CT', subdir)
             dest = src + '_mha'
-        converter(src, dest)
+            converter(src, dest)
 

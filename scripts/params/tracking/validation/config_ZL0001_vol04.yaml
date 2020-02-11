@@ -71,6 +71,6 @@ gpr_learn:
 gpr_predict:
    use_precomputed: false
    compute_groundtruth_features: true # true for validation data, false for test data
-   ar_batchSizePredict: [5]
-   ar_batchRepetitionPredict: [50]
+   ar_batchSize: [5]
+   ar_batchRepetition: [50]
    ar_onePredictionPerBatch: true

@@ -363,7 +363,7 @@ protected:
         }
 
         // Compute + write ground truth features, if required
-        if(!m_computeGtFeatures)
+        if(m_computeGtFeatures)
         {
             // Parse ground truth files
             ParseDisplacementFiles(m_outputMatrix, m_outputFiles);
