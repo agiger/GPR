@@ -9,6 +9,7 @@ INSTALL(FILES
         Prior.h
         PriorUtils.h
         LAPACKUtils.h
+        logUtils.h
         SparseGaussianProcess.h
         GaussianProcessInference.h
         itkUtils.h

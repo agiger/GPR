@@ -30,7 +30,9 @@ public:
     typedef Eigen::JacobiSVD<MatrixType>                JacobiSVDType;
     typedef Eigen::BDCSVD<MatrixType>                   BDCSVDType;
 
-    PCA(MatrixType& X){
+    PCA(MatrixType& X, int nFeatures){
+        m_nFeatures = nFeatures;
+
         // Compute mean-free data vectors
         m_mean = X.rowwise().mean();
         MatrixType _X = X.colwise() - m_mean;
@@ -42,9 +44,13 @@ public:
         m_sigma = svd.singularValues()/std::sqrt((TScalarType)X.cols());
         m_U = svd.matrixU();
         m_basis = m_U*m_sigma.asDiagonal().inverse();
+        MatrixType inverse = m_U*m_sigma.asDiagonal();
+        m_basisInverse = inverse.leftCols(m_nFeatures);
     }
 
-    PCA(std::string path){
+    PCA(std::string path, int nFeatures){
+        m_nFeatures = nFeatures;
+
         // Read PCA matrices from files (computed based on trainings data)
         std::string fnameMean = path + "Mean.bin";
         std::string fnameSigma = path + "Sigma.bin";
@@ -54,6 +60,12 @@ public:
         m_sigma = gpr::ReadMatrix<MatrixType>(fnameSigma);
         m_U = gpr::ReadMatrix<MatrixType>(fnameU);
         m_basis = m_U*m_sigma.asDiagonal().inverse();
+        MatrixType inverse = m_U*m_sigma.asDiagonal();
+        m_basisInverse = inverse.leftCols(m_nFeatures);
+    }
+
+    void PrecomputeTranspose(){
+        m_basisTranspose = m_basis.transpose().topRows(m_nFeatures);
     }
 
     VectorType GetMean(){
@@ -88,10 +100,17 @@ public:
         }
     }
 
+    MatrixType DimensionalityReductionFast(MatrixType& X){
+        MatrixType _X = X.colwise() - m_mean;
+        MatrixType features = m_basisTranspose*_X;
+
+        return features;
+    }
+
     MatrixType GetReconstruction(MatrixType& weights){
-        MatrixType basis = m_U*m_sigma.asDiagonal();
-        MatrixType _X = basis.leftCols(weights.rows())*weights;
+        MatrixType _X = m_basisInverse*weights;
         MatrixType X = _X.colwise() + m_mean;
+
         return X;
     }
 
@@ -115,10 +134,14 @@ public:
     }
 
 private:
+    int m_nFeatures;
     VectorType m_mean;
     VectorType m_sigma;
     MatrixType m_U;
     MatrixType m_basis;
+    MatrixType m_basisTranspose;
+    MatrixType m_basisInverse;
+
 };
 
 #endif //PROJECT_PCA_H

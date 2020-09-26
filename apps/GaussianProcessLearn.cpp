@@ -33,6 +33,7 @@
 using json = nlohmann::json;
 
 #include "itkUtils.h"
+#include "logUtils.h"
 #include "MatrixIO.h"
 
 typedef gpr::GaussianProcess<double>            GaussianProcessType;
@@ -106,43 +107,74 @@ int main (int argc, char *argv[]) {
     std::cout << " - input data: " << input_folder << std::endl;
     std::cout << " - output data: " << output_folder << std::endl;
     std::cout << " - ar data: " << ar_folder << std::endl << std::endl;
+    std::cout << "Use precomputed PCA basis: " << config_learn["use_precomputed"] << std::endl << std::endl;
+
+    // Write GP configuration to log file
+    std::string logPath = gpr_prefix + "-log_";
+    writeToLogFile(logPath, "\n" + getCurrentDateTime("now"));
+    writeToLogFile(logPath, "Gaussian process training app:" );
+    writeToLogFile(logPath, "Configuration:");
+    writeToLogFile(logPath, " - kernel string: " + kernel_string);
+    writeToLogFile(logPath, " - data noise: " + std::to_string(data_noise));
+    writeToLogFile(logPath, " - gpr prefix: " + gpr_prefix);
+    writeToLogFile(logPath, " - input data: " + input_folder);
+    writeToLogFile(logPath, " - output data: " + output_folder);
+    writeToLogFile(logPath, " - ar data: " + ar_folder);
+    writeToLogFile(logPath, "\nUse precomputed PCA basis: " + std::to_string(config_learn["use_precomputed"].get<bool>()) + "\n");
+
 
     try{
-        std::cout << "Initialize Gaussian process... " << std::flush;
-        KernelTypePointer kernel = KernelFactoryType::GetKernel(kernel_string);
-        GaussianProcessTypePointer gp(new GaussianProcessType(kernel));
-        gp->SetSigma(data_noise);
+      // Initialize GP
+      std::cout << "Initialize Gaussian process... " << std::flush;
+      auto t0 = std::chrono::system_clock::now();
+      KernelTypePointer kernel = KernelFactoryType::GetKernel(kernel_string);
+      GaussianProcessTypePointer gp(new GaussianProcessType(kernel));
+      gp->SetSigma(data_noise);
+      std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+      std::cout << "elapsed time: " << elapsed_seconds.count() << "s [done]" << std::endl;
+      writeToLogFile(logPath, "Initialize Gaussian process... elapsed time: " + std::to_string(elapsed_seconds.count()) + " [successfully completed]");
 
-        std::cout << "[done]" << std::endl << "Parse data and perform PCA... " << std::endl;
-        DataParserTypePointer parser(new DataParserType(input_folder, output_folder, ar_folder, gpr_prefix, config_model, config_learn));
-        TrainingPairVectorType train_pairs = parser->GetTrainingData();
+      // Parse data and perform PCA
+      std::cout << "Parse data and perform PCA... " << std::endl;
+      writeToLogFile(logPath, "Parse data and perform PCA...");
+      t0 = std::chrono::system_clock::now();
+      DataParserTypePointer parser(new DataParserType(input_folder, output_folder, ar_folder, gpr_prefix, config_model, config_learn));
+      TrainingPairVectorType train_pairs = parser->GetTrainingData();
+      elapsed_seconds = std::chrono::system_clock::now()-t0;
+      std::cout << "elapsed time: " << elapsed_seconds.count() << "s [done]" << std::endl;
+      writeToLogFile(logPath, "elapsed time: " + std::to_string(elapsed_seconds.count()) + " [PCA successfully completed]");
 
-        std::cout << "[done]" << std::endl << "Build Gaussian process... " << std::flush;
-        auto t0 = std::chrono::system_clock::now();
-        for(const auto &tp : train_pairs){
-            gp->AddSample(tp.first, tp.second);
-        }
-        std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
-        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
+      // Build GP
+      std::cout << "Build Gaussian process... " << std::flush;
+      t0 = std::chrono::system_clock::now();
+      for(const auto &tp : train_pairs){
+        gp->AddSample(tp.first, tp.second);
+      }
+      elapsed_seconds = std::chrono::system_clock::now()-t0;
+      std::cout << "elapsed time: " << elapsed_seconds.count() << "s [done]" << std::endl;
+      writeToLogFile(logPath, "Build Gaussian process... elapsed time: " + std::to_string(elapsed_seconds.count()) + " [successfully completed]");
 
+      // Perform learning
+      std::cout << "Perform training... " << std::flush;
+      t0 = std::chrono::system_clock::now();
+      gp->Initialize();
+      elapsed_seconds = std::chrono::system_clock::now()-t0;
+      std::cout << "elapsed time: " << elapsed_seconds.count() << "s [done]" << std::endl;
+      writeToLogFile(logPath, "Perform training...  elapsed time: " + std::to_string(elapsed_seconds.count()) + " [successfully completed]");
 
-        std::cout << "[done]" << std::endl << "Perform learning... " << std::flush;
-        t0 = std::chrono::system_clock::now();
-        gp->Initialize();
-        elapsed_seconds = std::chrono::system_clock::now()-t0;
-        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
+      // Saving GP
+      std::cout << "Saving Gaussian process... " << std::flush;
+      t0 = std::chrono::system_clock::now();
+      gp->Save(gpr_prefix);
+      elapsed_seconds = std::chrono::system_clock::now()-t0;
+      std::cout << "elapsed time: " << elapsed_seconds.count() << "s [done]" << std::endl;
+      writeToLogFile(logPath, "Saving Gaussian process...  elapsed time: " + std::to_string(elapsed_seconds.count()) + " [successfully completed]");
 
-        std::cout << "[done]" << std::endl << "Saving Gaussian process... " << std::flush;
-        t0 = std::chrono::system_clock::now();
-        gp->Save(gpr_prefix);
-        elapsed_seconds = std::chrono::system_clock::now()-t0;
-        std::cout << "elapsed time: " << elapsed_seconds.count() << "s" << std::flush;
-        std::cout << "[done]" << std::endl;
     }
     catch(std::string& s){
-        std::cout << std::endl << "Error: " << s << std::endl;
-        return -1;
+      std::cout << std::endl << "Error: " << s << std::endl;
+      return -1;
     }
 
-        return 0;
-    }
+    return 0;
+}

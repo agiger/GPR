@@ -18,6 +18,7 @@ Output * Comment
 #include "MatrixIO.h"
 #include "PCA.h"
 #include "AutoRegression.h"
+#include "logUtils.h"
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
 
@@ -55,6 +56,7 @@ public:
         m_performAr = config_model["perform_ar"].get<bool>();
         m_usePrecomputed = config_learn["use_precomputed"].get<bool>();
         m_computeGtFeatures = false;
+        m_logFile = gpr_prefix + "-log_";
 
         // Model parameters
         m_numberOfPrincipalModesInput = config_model["n_inputModes"].get<int>();
@@ -120,6 +122,12 @@ public:
             std::cout << "indEnd: " << m_indEndTrain << std::endl;
             std::cout << "nImgs: " << m_nTrainingImages << std::endl;
 
+            // Write to log file
+            writeToLogFile(m_logFile, "\tOnly a subset of the training data is considered:");
+            writeToLogFile(m_logFile, "\tindStart: " + std::to_string(m_indStartTrain));
+            writeToLogFile(m_logFile, "\tindEnd: " + std::to_string(m_indEndTrain));
+            writeToLogFile(m_logFile, "\tnImgs: " + std::to_string(m_nTrainingImages));
+
             if(m_performAr){
                 m_inputFiles.erase(m_inputFiles.begin()+(m_indEndTrain+1)*m_p, m_inputFiles.end());
                 m_inputFiles.erase(m_inputFiles.begin(), m_inputFiles.begin()+m_indStartTrain*m_p);
@@ -140,6 +148,7 @@ public:
         m_performAr = config_model["perform_ar"].get<bool>();
         m_usePrecomputed = config_predict["use_precomputed"].get<bool>();
         m_computeGtFeatures = config_predict["compute_groundtruth_features"].get<bool>();
+        m_logFile = gpr_prefix + "-log_";
 
         // Model parameters
         m_numberOfPrincipalModesInput = config_model["n_inputModes"].get<int>();
@@ -176,6 +185,8 @@ public:
         PcaFeatureExtractionForTraining();
         std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
         std::cout << "outputFeatures: " << m_outputFeatures.rows() << "x" << m_outputFeatures.cols() << std::endl;
+        writeToLogFile(m_logFile, "\tinputFeatures: " + std::to_string(m_inputFeatures.rows()) + "x" + std::to_string(m_inputFeatures.cols()));
+        writeToLogFile(m_logFile, "\toutputFeatures: " + std::to_string(m_outputFeatures.rows()) + "x" + std::to_string(m_outputFeatures.cols()));
         CreateTrainingVectorPair();
         return m_trainingPairs;
     }
@@ -184,6 +195,7 @@ public:
     {
         PcaFeatureExtractionForPrediction();
         std::cout << "inputFeatures: " << m_inputFeatures.rows() << "x" << m_inputFeatures.cols() << std::endl;
+        writeToLogFile(m_logFile, "\tinputFeatures: " + std::to_string(m_inputFeatures.rows()) + "x" + std::to_string(m_inputFeatures.cols()));
         CreateTestVector();
         return m_testVector;
     }
@@ -196,14 +208,92 @@ public:
         return m_predictionVector;
     }
 
+    std::vector<double> GetComputationTime()
+    {
+      std::vector<double> compTime;
+      auto t0 = std::chrono::system_clock::now();
+      std::chrono::duration<double> elapsed_seconds;
+
+      // Read PCA basis
+      PcaType inputPca(m_gprPrefixInput, m_numberOfPrincipalModesInput);
+      inputPca.PrecomputeTranspose();
+      PcaType outputPca(m_gprPrefixOutput, m_numberOfPrincipalModesOutput);
+      outputPca.PrecomputeTranspose();
+
+      // Loop over all inputFiles
+      std::cout << "PCA for inference done in (s):" << std::endl;
+      writeToLogFile(m_logFile, "\tPCA for inference done in (s):");
+
+      if(!m_performAr){
+        for(unsigned int itr = 0; itr < m_inputFiles.size()/m_p; itr++)
+        {
+          t0 = std::chrono::system_clock::now();
+
+          // 1. Get input features (principal components) from input data (US image)
+          std::vector<std::string> inputFiles(1, m_inputFiles[itr]);
+          MatrixType inputMatrix;
+          ParseImageFiles(inputMatrix, inputFiles);
+          MatrixType inputFeatures = inputPca.DimensionalityReductionFast(inputMatrix);
+
+          // 2. Predict output features -> m_predictedFeatures
+
+          // 3. Reconstruct output data from output features (principal components)
+          MatrixType outputFeatures(m_numberOfPrincipalModesOutput, 1);
+          outputFeatures = m_predictedFeatures[itr];
+          m_predictedOutputMatrix = outputPca.GetReconstruction(outputFeatures);
+
+          // Computation time
+          elapsed_seconds = std::chrono::system_clock::now()-t0;
+          compTime.push_back(elapsed_seconds.count());
+          std::cout << elapsed_seconds.count() << std::endl;
+          writeToLogFile(m_logFile, "\t" + std::to_string(elapsed_seconds.count()));
+        }
+      }
+      else{
+        AutoRegressionType ar(m_n, m_p);
+        ar.ReadModelParametersFromFile(m_gprPrefix + "-arModel.bin");
+        std::vector<int> batchRepetition(1,1);
+        MatrixType inputFeaturesTranspose(m_p, m_numberOfPrincipalModesInput);
+
+        for(unsigned int itr = 0; itr < m_inputFiles.size()/m_p; itr++)
+        {
+          t0 = std::chrono::system_clock::now();
+
+          // 1. Get input features (principal components) from input data (US image)
+          std::vector<std::string> inputFiles(m_inputFiles.cbegin() + itr*m_p, m_inputFiles.cbegin() + (itr+1)*m_p);
+          MatrixType inputMatrix;
+          ParseImageFiles(inputMatrix, inputFiles);
+
+          inputFeaturesTranspose = inputPca.DimensionalityReductionFast(inputMatrix).transpose();
+          MatrixType inputFeatures = ar.Predict(inputFeaturesTranspose, m_nBatchTypes, &m_batchSize[0], &batchRepetition[0], m_onePredictionPerBatch).transpose();
+
+          // 2. Predict output features -> m_predictedFeatures
+
+          // 3. Reconstruct output data from output features (principal components)
+          MatrixType outputFeatures(m_numberOfPrincipalModesOutput, 1);
+          outputFeatures = m_predictedFeatures[itr];
+          MatrixType predictedOutputMatrix = outputPca.GetReconstruction(outputFeatures);
+
+          // Computation time
+          elapsed_seconds = std::chrono::system_clock::now()-t0;
+          compTime.push_back(elapsed_seconds.count());
+          std::cout << elapsed_seconds.count() << std::endl;
+          writeToLogFile(m_logFile, "\t" + std::to_string(elapsed_seconds.count()));
+        }
+      }
+
+      return compTime;
+    }
+
 protected:
     void ComputeFeaturesForTraining(MatrixType& features, MatrixType& matrix, int nModes, std::string prefix, std::string reference)
     {
         // Compute PCA
         auto t0 = std::chrono::system_clock::now();
-        PcaType pca(matrix);
+        PcaType pca(matrix, nModes);
         std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
         std::cout << "Pca done in " << elapsed_seconds.count() << "s" << std::endl;
+        writeToLogFile(m_logFile, "\tPca done in " + std::to_string(elapsed_seconds.count()) + "s");
 
         // Features
         features = pca.DimensionalityReduction(matrix, nModes);
@@ -234,6 +324,8 @@ protected:
 
         std::cout << "Basis: " << basis.rows() << "x" << basis.cols() << std::endl;
         std::cout << "Features: " << features.rows() << "x" << features.cols() << std::endl;
+        writeToLogFile(m_logFile, "\tBasis: " + std::to_string(basis.rows()) + "x" + std::to_string(basis.cols()));
+        writeToLogFile(m_logFile, "\tFeatures: " + std::to_string(features.rows()) + "x" + std::to_string(features.cols()));
 
         return;
     }
@@ -326,7 +418,7 @@ protected:
         {
             // Parse input files
             ParseImageFiles(m_inputMatrix, m_inputFiles);
-            PcaType inputPca(m_gprPrefixInput);
+            PcaType inputPca(m_gprPrefixInput, m_numberOfPrincipalModesInput);
 
             MatrixType fullInputFeatures = inputPca.DimensionalityReduction(m_inputMatrix);
 //            gpr::WriteMatrix<MatrixType>(fullInputFeatures, m_pathInputFeaturesForPrediction);
@@ -367,7 +459,7 @@ protected:
         {
             // Parse ground truth files
             ParseDisplacementFiles(m_outputMatrix, m_outputFiles);
-            PcaType outputPca(m_gprPrefixOutput);
+            PcaType outputPca(m_gprPrefixOutput, m_numberOfPrincipalModesOutput);
 
             m_outputFeatures = outputPca.DimensionalityReduction(m_outputMatrix, m_numberOfPrincipalModesOutput);
             MatrixType m_fullOutputFeatures = outputPca.DimensionalityReduction(m_outputMatrix);
@@ -388,8 +480,18 @@ protected:
         }
 //        gpr::WriteMatrix<MatrixType>(outputFeatures, m_pathOutputFeaturesForPrediction);
         WriteToCsvFile(m_pathOutputFeaturesForPrediction, outputFeatures);
-        PcaType outputPca(m_gprPrefixOutput);
+        auto t0 = std::chrono::system_clock::now();
+        PcaType outputPca(m_gprPrefixOutput, m_numberOfPrincipalModesOutput);
+        std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "Pca for output data done in " << elapsed_seconds.count() << "s" << std::endl;
+        writeToLogFile(m_logFile, "\tPca for output data done in " + std::to_string(elapsed_seconds.count()) + "s");
+
+        t0 = std::chrono::system_clock::now();
         m_predictedOutputMatrix = outputPca.GetReconstruction(outputFeatures);
+        elapsed_seconds = std::chrono::system_clock::now()-t0;
+        std::cout << "Output recontruction from principal components done in " << elapsed_seconds.count() << "s" << std::endl;
+        writeToLogFile(m_logFile, "\tOutput recontruction from principal components done in " + std::to_string(elapsed_seconds.count()) + "s");
+
     }
 
     void CreateTrainingVectorPair()
@@ -428,6 +530,7 @@ protected:
         }
         sort(files.begin(), files.end());
         std::cout << "Filecount: " << files.size() << std::endl;
+        writeToLogFile(m_logFile, "\tFilecount: " + std::to_string(files.size()));
     }
 
     void ParseImageFiles(MatrixType& matrix, std::vector<std::string>& filenames)
@@ -625,6 +728,7 @@ protected:
         }
         file.close();
         std::cout << filename << " has been written" << std::endl;
+        writeToLogFile(m_logFile, "\t" + filename + " has been written");
     }
 
     MatrixType ReadFromCsvFile(const std::string & path) {
@@ -672,6 +776,7 @@ private:
     int m_indEndTrain;
 
     // File paths
+    std::string m_logFile;
     std::string m_srcPathInput;
     std::string m_srcPathOutput;
     std::string m_gprPrefix;
