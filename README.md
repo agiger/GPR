@@ -5,9 +5,9 @@ The code was amended specifically for ultrasound-based respiratory motion modell
 * Principal Component Analysis (PCA) for dimensionality reduction, and
 * a linear autoregressive (AR) model for prediction the respiratory state ahead of time.
 
-**Usage:**
-1. Use *GaussianProcessLearn.cpp* for training
-2. Use *GaussianProcessPredict.cpp* for prediction
+##Usage:
+1. Use *apps/GaussianProcessLearn.cpp* for training
+2. Use *apps/GaussianProcessPredict.cpp* for prediction
 
 ## Requirements:
 * General reqiuirements are listed below
