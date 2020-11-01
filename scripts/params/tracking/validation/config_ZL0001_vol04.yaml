@@ -19,7 +19,7 @@ exe:
 # General configuration
 general:
    surrogate_type: -1 #  0 - MR navigators, 1 - ultrasound
-   root_dir: '/media/WDportable/MotionModelling_Tracking/ZL0001_vol04'
+   root_dir: '/media/WDportable/MotionModelling_PMB02_Tracking/ZL0001_vol04'
    input_dir: 'pairs/US'
    output_dir: 'pairs/CT'
    ar_dir: 'pairs/AR'
