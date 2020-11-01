@@ -67,7 +67,7 @@ typedef PCA<double>                  PcaType;
 int main (int argc, char *argv[]) {
     std::cout << "\nGaussian process training app:" << std::endl;
     if (argc !=6 && argc !=7){
-        std::cout << "Usage: " << argv[0] << " <path/to/config_model.json> <path/to/config_model.json>"
+        std::cout << "Usage: " << argv[0] << " <path/to/config_model.json> <path/to/config_predict.json>"
                                              " gpr_prefix input_folder output_folder"
                                              " [ar_folder]" << std::endl;
         return -1;
@@ -86,15 +86,6 @@ int main (int argc, char *argv[]) {
     if(config_model["perform_ar"].get<bool>()){
         ar_folder = argv[++itr_argv];
     }
-
-    // TODO: check config file for exceptions
-    // iterate the array
-//    for (json::iterator it = config.begin(); it != config.end(); ++it) {
-//        std::cout << *it << '\n';
-//    }
-
-//    auto batchSize = config["ar_batchSize"];
-//    std::cout << batchSize[0] << " " << batchSize[1] << std::endl;
 
     // GP configuration
     std::string kernel_string = config_model["kernel_string"].get<std::string>();
